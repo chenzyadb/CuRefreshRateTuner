@@ -1,0 +1,18 @@
+{
+    "idleDelay": 2000,
+    "*": {
+        "active": 120,
+        "idle": 60,
+        "resolution": 1080
+    },
+    "screenOff": {
+        "active": 60,
+        "idle": 60,
+        "resolution": 1080
+    },
+    "com.miHoYo.Yuanshen": {
+        "active": 60,
+        "idle": 60,
+        "resolution": 1080
+    }
+}
