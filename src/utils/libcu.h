@@ -23,6 +23,7 @@
 #include <cstring>
 #include <cstdint>
 #include <cstddef>
+#include <cctype>
 #include <cinttypes>
 
 inline std::vector<std::string> StrSplit(const std::string &str, const std::string &delimiter)
@@ -206,6 +207,16 @@ inline bool StrContains(const std::string &str, const std::string &subStr)
         return false;
     }
     return (str.find(subStr) != std::string::npos);
+}
+
+inline bool StrEmpty(const std::string &str) noexcept
+{
+    for (const auto &ch : str) {
+        if (isalnum(ch) != 0) {
+            return false;
+        }
+    }
+    return true;
 }
 
 inline int StringToInteger(const std::string &str) noexcept
@@ -687,6 +698,11 @@ inline std::string ExecCommand(const std::string &command)
         pclose(fp);
     }
     return ret;
+}
+
+inline int RunCommand(const std::string &command) noexcept
+{
+    return system(command.c_str());
 }
 
 

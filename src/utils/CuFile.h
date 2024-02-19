@@ -1,6 +1,9 @@
 #pragma once
 
-#include "libcu.h"
+#include <string>
+#include <memory>
+#include <unistd.h>
+#include <fcntl.h>
 
 namespace CU 
 {

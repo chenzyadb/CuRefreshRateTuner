@@ -1,9 +1,9 @@
 #!/usr/bin/sh
 
+ANDROID_NDK="/home/android-ndk"
 SOURCE_DIR=$(dirname $0)
 BUILD_DIR="${SOURCE_DIR}/build"
-WINDOWS_SOURCE_DIR="/mnt/c/Users/chenz/Documents/GitHub/CuRefreshRateTuner"
-TOOLCHAIN_BIN="/home/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
+TOOLCHAIN_BIN="${ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin"
 TARGET_PREFIX="aarch64-linux-android29"
 
 rm -rf ${BUILD_DIR}
