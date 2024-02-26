@@ -284,20 +284,9 @@ inline uint64_t String16BitToInteger(const std::string &str) noexcept
 inline std::string TrimStr(const std::string &str) 
 {
     std::string trimedStr{};
-    for (const auto &c : str) {
-        switch (c) {
-            case ' ':
-            case '\n':
-            case '\t':
-            case '\r':
-            case '\f':
-            case '\a':
-            case '\b':
-            case '\v':
-                break;
-            default:
-                trimedStr += c;
-                break;
+    for (const auto &ch : str) {
+        if (isalnum(ch) != 0) {
+            trimedStr += ch;
         }
     }
     return trimedStr;
@@ -329,6 +318,34 @@ inline T AbsVal(const T &num) noexcept
         return -num;
     }
     return num;
+}
+
+template <typename T>
+inline T SquareVal(const T &val) noexcept
+{
+    return (val * val);
+}
+
+template <typename T>
+inline T SqrtVal(const T &val) noexcept
+{
+    if (val == 0) {
+        return 0;
+    }
+
+    auto high = static_cast<double>(val), low = 0.0;
+    if (val < 1.0) {
+        high = 1.0;
+    }
+    while ((high - low) > 0.01) {
+        auto mid = (low + high) / 2;
+        if ((mid * mid) > val) {
+            high = mid;
+        } else {
+            low = mid;
+        }
+    }
+    return static_cast<T>((low + high) / 2);
 }
 
 template <typename T>

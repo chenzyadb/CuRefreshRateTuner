@@ -164,13 +164,16 @@ void RefreshRateTuner::ScreenStateChanged_(const CU::EventTransfer::TransData &t
     auto screenState = CU::EventTransfer::GetData<ScreenState>(transData);
     if (screenState == ScreenState::SCREEN_OFF) {
         UpdatePolicy_("screenOff");
+        WorkerThread_AddWork([this]() {
+            SwitchRefreshRate_();
+        });
     } else {
         UpdatePolicy_("*");
+        WorkerThread_AddWork([this]() {
+            ResetRefreshRate_();
+            SwitchRefreshRate_();
+        });
     }
-    WorkerThread_AddWork([this]() {
-        ResetRefreshRate_();
-        SwitchRefreshRate_();
-    });
 }
 
 void RefreshRateTuner::TopAppChanged_(const CU::EventTransfer::TransData &transData)

@@ -15,5 +15,5 @@ class InputListener : public Module
 		void Start();
 
 	private:
-		void ListenerMain_(const int fd);
+		void ListenerMain_(std::string eventPath);
 };
