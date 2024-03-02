@@ -144,7 +144,7 @@ void RefreshRateTuner::SwitchRefreshRate_()
 void RefreshRateTuner::ResetRefreshRate_()
 {
     int sdk_ver = GetAndroidSDKVersion();
-    if (sdk_ver >= 31) {
+    if (sdk_ver >= 31 && sdk_ver <= 33) {
         // Inject a hotplug connected event for the primary display.
         RunCommand("service call SurfaceFlinger 1037");
     }

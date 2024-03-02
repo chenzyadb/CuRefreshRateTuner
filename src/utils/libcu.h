@@ -285,8 +285,19 @@ inline std::string TrimStr(const std::string &str)
 {
     std::string trimedStr{};
     for (const auto &ch : str) {
-        if (isalnum(ch) != 0) {
-            trimedStr += ch;
+        switch (ch) {
+            case ' ':
+            case '\n':
+            case '\t':
+            case '\r':
+            case '\f':
+            case '\a':
+            case '\b':
+            case '\v':
+                break;
+            default:
+                trimedStr += ch;
+                break;
         }
     }
     return trimedStr;
