@@ -126,14 +126,15 @@ CU::JSONItem::JSONItem(const JSONItem &other) :
 	if (std::addressof(other) == this) {
 		return;
 	}
+	const auto &other_value = other.value();
 	if (type_ == ItemType::ARRAY) {
-		const auto &jsonArray = *(std::get<JSONArray*>(other.value()));
+		const auto &jsonArray = *(std::get<JSONArray*>(other_value));
 		value_ = new JSONArray(jsonArray);
 	} else if (type_ == ItemType::OBJECT) {
-		const auto &jsonObject = *(std::get<JSONObject*>(other.value()));
+		const auto &jsonObject = *(std::get<JSONObject*>(other_value));
 		value_ = new JSONObject(jsonObject);
 	} else {
-		value_ = other.value();
+		value_ = other_value;
 	}
 }
 
@@ -144,14 +145,15 @@ CU::JSONItem::JSONItem(JSONItem &&other) noexcept :
 	if (std::addressof(other) == this) {
 		return;
 	}
+	const auto &other_value = other.value();
 	if (type_ == ItemType::ARRAY) {
-		const auto &jsonArray = *(std::get<JSONArray*>(other.value()));
+		const auto &jsonArray = *(std::get<JSONArray*>(other_value));
 		value_ = new JSONArray(jsonArray);
 	} else if (type_ == ItemType::OBJECT) {
-		const auto &jsonObject = *(std::get<JSONObject*>(other.value()));
+		const auto &jsonObject = *(std::get<JSONObject*>(other_value));
 		value_ = new JSONObject(jsonObject);
 	} else {
-		value_ = other.value();
+		value_ = other_value;
 	}
 }
 
@@ -170,14 +172,15 @@ CU::JSONItem &CU::JSONItem::operator()(const JSONItem &other)
 	if (std::addressof(other) != this) {
 		clear();
 		type_ = other.type();
+		const auto &other_value = other.value();
 		if (type_ == ItemType::ARRAY) {
-			const auto &jsonArray = *(std::get<JSONArray*>(other.value()));
+			const auto &jsonArray = *(std::get<JSONArray*>(other_value));
 			value_ = new JSONArray(jsonArray);
 		} else if (type_ == ItemType::OBJECT) {
-			const auto &jsonObject = *(std::get<JSONObject*>(other.value()));
+			const auto &jsonObject = *(std::get<JSONObject*>(other_value));
 			value_ = new JSONObject(jsonObject);
 		} else {
-			value_ = other.value();
+			value_ = other_value;
 		}
 	}
 	return *this;
@@ -188,14 +191,15 @@ CU::JSONItem &CU::JSONItem::operator=(const JSONItem &other)
 	if (std::addressof(other) != this) {
 		clear();
 		type_ = other.type();
+		const auto &other_value = other.value();
 		if (type_ == ItemType::ARRAY) {
-			const auto &jsonArray = *(std::get<JSONArray*>(other.value()));
+			const auto &jsonArray = *(std::get<JSONArray*>(other_value));
 			value_ = new JSONArray(jsonArray);
 		} else if (type_ == ItemType::OBJECT) {
-			const auto &jsonObject = *(std::get<JSONObject*>(other.value()));
+			const auto &jsonObject = *(std::get<JSONObject*>(other_value));
 			value_ = new JSONObject(jsonObject);
 		} else {
-			value_ = other.value();
+			value_ = other_value;
 		}
 	}
 	return *this;
@@ -234,7 +238,17 @@ void CU::JSONItem::clear()
 
 size_t CU::JSONItem::size() const
 {
-	return sizeof(*this);
+	switch (type_) {
+		case ItemType::STRING:
+			return std::get<std::string>(value_).size();
+		case ItemType::ARRAY:
+			return std::get<JSONArray*>(value_)->size();
+		case ItemType::OBJECT:
+			return std::get<JSONObject*>(value_)->size();
+		default:
+			break;
+	}
+	return 1;
 }
 
 bool CU::JSONItem::toBoolean() const
@@ -295,52 +309,6 @@ CU::JSONObject CU::JSONItem::toObject() const
 
 std::string CU::JSONItem::toRaw() const
 {
-	static const auto stringToJSONRaw = [](const std::string &str) -> std::string {
-		std::string JSONRaw("\"");
-		for (const auto &ch : str) {
-			switch (ch) {
-				case '\\':
-					JSONRaw += "\\\\";
-					break;
-				case '\"':
-					JSONRaw += "\\\"";
-					break;
-				case '\'':
-					JSONRaw += "\\\'";
-					break;
-				case '\n':
-					JSONRaw += "\\n";
-					break;
-				case '\t':
-					JSONRaw += "\\t";
-					break;
-				case '\r':
-					JSONRaw += "\\r";
-					break;
-				case '\f':
-					JSONRaw += "\\f";
-					break;
-				case '\a':
-					JSONRaw += "\\a";
-					break;
-				case '\b':
-					JSONRaw += "\\b";
-					break;
-				case '\v':
-					JSONRaw += "\\v";
-					break;
-				case '/':
-					JSONRaw += "\\/";
-					break;
-				default:
-					JSONRaw += ch;
-					break;
-			}
-		}
-		JSONRaw += '\"';
-		return JSONRaw;
-	};
-
 	std::string JSONRaw{};
 	switch (type_) {
 		case ItemType::ITEM_NULL:
@@ -363,7 +331,7 @@ std::string CU::JSONItem::toRaw() const
 			JSONRaw = std::to_string(std::get<double>(value_));
 			break;
 		case ItemType::STRING:
-			JSONRaw = stringToJSONRaw(std::get<std::string>(value_));
+			JSONRaw = _StringToJSONRaw(std::get<std::string>(value_));
 			break;
 		case ItemType::ARRAY:
 			JSONRaw = std::get<JSONArray*>(value_)->toString();
@@ -387,7 +355,7 @@ CU::JSONArray::JSONArray(const std::string &JSONString) : data_()
 {
 	enum class ArrayIdx : uint8_t {NONE, ITEM_FRONT, ITEM_COMMON, ITEM_STRING, ITEM_ARRAY, ITEM_OBJECT, ITEM_BACK};
 	size_t pos = 0;
-	ArrayIdx idx = ArrayIdx::NONE;
+	auto idx = ArrayIdx::NONE;
 	uint32_t count = 0;
 	std::string content{};
 	while (pos < JSONString.size()) {
@@ -613,8 +581,8 @@ CU::JSONArray &CU::JSONArray::operator=(const JSONArray &other)
 CU::JSONArray &CU::JSONArray::operator+=(const JSONArray &other)
 {
 	if (std::addressof(other) != this) {
-		const auto &data = other.data();
-		for (auto iter = data.begin(); iter < data.end(); iter++) {
+		const auto &other_data = other.data();
+		for (auto iter = other_data.begin(); iter < other_data.end(); iter++) {
 			data_.emplace_back(*iter);
 		}
 	}
@@ -631,14 +599,14 @@ CU::JSONItem &CU::JSONArray::operator[](const size_t &pos)
 
 CU::JSONArray CU::JSONArray::operator+(const JSONArray &other) const
 {
-	auto data = data_;
+	auto merged_data = data_;
 	if (std::addressof(other) != this) {
 		const auto &other_data = other.data();
 		for (auto iter = other_data.begin(); iter < other_data.end(); iter++) {
-			data.emplace_back(*iter);
+			merged_data.emplace_back(*iter);
 		}
 	}
-	return JSONArray(data);
+	return JSONArray(merged_data);
 }
 
 bool CU::JSONArray::operator==(const JSONArray &other) const
@@ -823,7 +791,7 @@ CU::JSONObject::JSONObject(const std::string &JSONString) : data_(), order_()
 	enum class ObjectIdx : uint8_t 
 	{NONE, KEY_FRONT, KEY_CONTENT, KEY_BACK, VALUE_FRONT, VALUE_COMMON, VALUE_STRING, VALUE_ARRAY, VALUE_OBJECT, VALUE_BACK};
 	size_t pos = 0;
-	ObjectIdx idx = ObjectIdx::NONE;
+	auto idx = ObjectIdx::NONE;
 	uint32_t count = 0;
 	std::string key{}, value{};
 	while (pos < JSONString.size()) {
@@ -1000,13 +968,10 @@ CU::JSONObject::JSONObject(const std::string &JSONString) : data_(), order_()
 	}
 }
 
-CU::JSONObject::JSONObject(const std::unordered_map<std::string, JSONItem> &data) : data_(), order_()
-{
-	for (auto iter = data.begin(); iter != data.end(); iter++) {
-		order_.emplace_back(iter->first);
-		data_[iter->first] = iter->second;
-	}
-}
+CU::JSONObject::JSONObject(const std::unordered_map<std::string, JSONItem> &data, const std::vector<std::string> &order) : 
+	data_(data),
+	order_(order)
+{ }
 
 CU::JSONObject::JSONObject(const JSONObject &other) : data_(), order_()
 {
@@ -1049,12 +1014,13 @@ CU::JSONObject &CU::JSONObject::operator+=(const JSONObject &other)
 	if (std::addressof(other) != this) {
 		auto other_data = other.data();
 		auto other_order = other.order();
-		for (auto iter = other_order.begin(); iter < other_order.end(); iter++) {
-			const auto &key = *iter;
+		for (const auto &key : other_order) {
 			if (data_.count(key) == 0) {
 				order_.emplace_back(key);
+				data_.emplace(key, other_data.at(key));
+			} else {
+				data_[key] = other_data.at(key);
 			}
-			data_[key] = other_data.at(key);
 		}
 	}
 	return *this;
@@ -1070,14 +1036,19 @@ CU::JSONItem &CU::JSONObject::operator[](const std::string &key)
 
 CU::JSONObject CU::JSONObject::operator+(const JSONObject &other) const
 {
-	auto data = data_;
-	if (std::addressof(other) != this) {
-		auto other_data = other.data();
-		for (auto iter = other_data.begin(); iter != other_data.end(); iter++) {
-			data[iter->first] = iter->second;
+	auto merged_data = data_;
+	auto merged_order = order_;
+	const auto &other_data = other.data();
+	const auto &other_order = other.order();
+	for (const auto &key : other_order) {
+		if (merged_data.count(key) == 1) {
+			merged_data[key] = other_data.at(key);
+		} else {
+			merged_order.emplace_back(key);
+			merged_data.emplace(key, other_data.at(key));
 		}
 	}
-	return JSONObject(data);
+	return JSONObject(merged_data, merged_order);
 }
 
 bool CU::JSONObject::operator==(const JSONObject &other) const
@@ -1108,8 +1079,10 @@ void CU::JSONObject::add(const std::string &key, const JSONItem &value)
 {
 	if (data_.count(key) == 0) {
 		order_.emplace_back(key);
+		data_.emplace(key, value);
+	} else {
+		data_[key] = value;
 	}
-	data_[key] = value;
 }
 
 void CU::JSONObject::remove(const std::string &key)
@@ -1118,8 +1091,8 @@ void CU::JSONObject::remove(const std::string &key)
 	if (iter == order_.end()) {
 		throw JSONExcept("Key not found");
 	}
+	data_.erase(key);
 	order_.erase(iter);
-	data_.erase(*iter);
 }
 
 void CU::JSONObject::clear()
@@ -1155,16 +1128,15 @@ std::string CU::JSONObject::toString() const
 		return JSONString;
 	} else if ((order_.begin() + 1) == order_.end()) {
 		std::string JSONString("{");
-		JSONString += std::string("\"") + order_.front() + "\":" + data_.at(order_.front()).toRaw() + "}";
+		JSONString += _StringToJSONRaw(order_.front()) + ":" + data_.at(order_.front()).toRaw() + "}";
 		return JSONString;
 	}
 	std::string JSONString("{");
 	for (auto iter = order_.begin(); iter < (order_.end() - 1); iter++) {
 		const auto &key = *iter;
-		auto valueRaw = data_.at(key).toRaw();
-		JSONString += std::string("\"") + key + "\":" + valueRaw + ",";
+		JSONString += _StringToJSONRaw(key) + ":" + data_.at(key).toRaw() + ",";
 	}
-	JSONString += std::string("\"") + order_.back() + "\":" + data_.at(order_.back()).toRaw() + "}";
+	JSONString += _StringToJSONRaw(order_.back()) + ":" + data_.at(order_.back()).toRaw() + "}";
 	return JSONString;
 }
 
@@ -1175,15 +1147,26 @@ std::string CU::JSONObject::toFormatedString() const
 		return JSONString;
 	} else if ((order_.begin() + 1) == order_.end()) {
 		std::string JSONString("{\n");
-		JSONString += std::string("  \"") + order_.front() + "\": " + data_.at(order_.front()).toRaw() + "\n}";
+		JSONString += std::string("  ") + _StringToJSONRaw(order_.front()) + ": " + data_.at(order_.front()).toRaw() + "\n}";
 		return JSONString;
 	}
 	std::string JSONString("{\n");
 	for (auto iter = order_.begin(); iter < (order_.end() - 1); iter++) {
 		const auto &key = *iter;
-		auto valueRaw = data_.at(key).toRaw();
-		JSONString += std::string("  \"") + key + "\": " + valueRaw + ",\n";
+		JSONString += std::string("  ") + _StringToJSONRaw(key) + ": " + data_.at(key).toRaw() + ",\n";
 	}
-	JSONString += std::string("  \"") + order_.back() + "\": " + data_.at(order_.back()).toRaw() + "\n}";
+	JSONString += std::string("  ") + _StringToJSONRaw(order_.back()) + ": " + data_.at(order_.back()).toRaw() + "\n}";
 	return JSONString;
+}
+
+std::vector<CU::JSONObject::JSONPair> CU::JSONObject::toPairs() const
+{
+	std::vector<CU::JSONObject::JSONPair> pairs{};
+	for (const auto &key : order_) {
+		JSONPair pair{};
+		pair.key = key;
+		pair.value = data_.at(key);
+		pairs.emplace_back(pair);
+	}
+	return pairs;
 }

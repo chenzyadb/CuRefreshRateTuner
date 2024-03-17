@@ -16,4 +16,4 @@ if [ ! -d /sdcard/Android/CuRefreshRateTuner ] ; then
 fi
 rm -f ${MODPATH}/config.json
 
-ui_print "- Install finished."
+ui_print "- installation is complete."

@@ -3,7 +3,7 @@
 RefreshRateTuner::RefreshRateTuner(const std::string &configPath) : 
     Module(), 
     configPath_(configPath),
-    displayModes_(), 
+    displayModeMap_(), 
     config_(),
     activeDisplayModeIdx_(-1),
     idleDisplayModeIdx_(-1),
@@ -19,7 +19,7 @@ void RefreshRateTuner::Start()
     LoadConfig_();
     UpdatePolicy_("*");
     ResetRefreshRate_();
-    SwitchRefreshRate_();
+    SetIdleRefreshRate_();
     CU::EventTransfer::Subscribe("CgroupWatcher.ScreenStateChanged", 
         std::bind(&RefreshRateTuner::ScreenStateChanged_, this, std::placeholders::_1));
     CU::EventTransfer::Subscribe("TopAppMonitor.TopAppChanged", 
@@ -48,21 +48,12 @@ void RefreshRateTuner::Init_()
         }
     }
     for (const auto &modeRecord : supportedModes) {
-        CU::JSONObject displayMode{};
-        displayMode["id"] = StringToInteger(GetPrevString(GetPostString(modeRecord, "id="), ","));
-        displayMode["width"] = StringToInteger(GetPrevString(GetPostString(modeRecord, "width="), ","));
-        displayMode["height"] = StringToInteger(GetPrevString(GetPostString(modeRecord, "height="), ","));
-        displayMode["fps"] = StringToInteger(GetPrevString(GetPostString(modeRecord, "fps="), "."));
-        displayModes_.add(displayMode);
-    }
-
-    CU::Logger::Info("Display Modes:");
-    for (const auto &item : displayModes_) {
-        auto displayMode = item.toObject();
-        int id = displayMode.at("id").toInt();
-        int width = displayMode.at("width").toInt();
-        int height = displayMode.at("height").toInt();
-        int fps = displayMode.at("fps").toInt();
+        int id = StringToInteger(GetPrevString(GetPostString(modeRecord, "id="), ","));
+        int width = StringToInteger(GetPrevString(GetPostString(modeRecord, "width="), ","));
+        int height = StringToInteger(GetPrevString(GetPostString(modeRecord, "height="), ","));
+        int fps = StringToInteger(GetPrevString(GetPostString(modeRecord, "fps="), "."));
+        displayModeMap_[fps][width] = id - 1;
+        displayModeMap_[fps][height] = id - 1;
         CU::Logger::Info("id=%d, resolution=%dx%d, fps=%d.", id, width, height, fps);
     }
 }
@@ -77,7 +68,7 @@ void RefreshRateTuner::IdleLoop_()
         if (active_ && keyUpTime_ > keyDownTime_) {
             auto keyUpDuration = GetTimeStampMs() - keyUpTime_;
             if (keyUpDuration >= idleDelay) {
-                SwitchRefreshRate_();
+                SetIdleRefreshRate_();
                 usleep(idleDelay * 1000);
             } else {
                 usleep((idleDelay - keyUpDuration) * 1000);
@@ -102,17 +93,16 @@ void RefreshRateTuner::LoadConfig_()
 void RefreshRateTuner::UpdatePolicy_(const std::string &appName)
 {
     static const auto findDisplayModeIdx = [this](const int &fps, const int &resolution) -> int {
-        for (const auto &item : displayModes_) {
-            auto displayMode = item.toObject();
-            if (displayMode.at("fps").toInt() == fps) {
-                int width = displayMode.at("width").toInt();
-                int height = displayMode.at("height").toInt();
-                if (width == resolution || height == resolution) {
-                    return (displayMode.at("id").toInt() - 1);
-                }
-            }
+        auto fpsIter = displayModeMap_.find(fps);
+        if (fpsIter == displayModeMap_.end()) {
+            return -1;
         }
-        return -1;
+        const auto &resolutionMap = fpsIter->second;
+        auto resolutionIter = resolutionMap.find(resolution);
+        if (resolutionIter == resolutionMap.end()) {
+            return -1;
+        }
+        return resolutionIter->second;
     };
 
     auto config = config_.data();
@@ -130,21 +120,27 @@ void RefreshRateTuner::UpdatePolicy_(const std::string &appName)
     }
 }
 
-void RefreshRateTuner::SwitchRefreshRate_()
+void RefreshRateTuner::SetActiveRefreshRate_()
 {
-    if (keyDownTime_ > keyUpTime_) {
-        RunCommand(StrMerge("service call SurfaceFlinger 1035 i32 %d", activeDisplayModeIdx_));
-        active_ = true;
-    } else {
-        RunCommand(StrMerge("service call SurfaceFlinger 1035 i32 %d", idleDisplayModeIdx_));
-        active_ = false;
-    }
+    RunCommand(StrMerge("service call SurfaceFlinger 1035 i32 %d", activeDisplayModeIdx_));
+    active_ = true;
+}
+
+void RefreshRateTuner::SetIdleRefreshRate_()
+{
+    RunCommand(StrMerge("service call SurfaceFlinger 1035 i32 %d", idleDisplayModeIdx_));
+    active_ = false;
 }
 
 void RefreshRateTuner::ResetRefreshRate_()
 {
+    static const auto isFlymeOS = []() -> bool {
+        char buffer[PROP_VALUE_MAX] = { 0 };
+        return (__system_property_get("ro.build.flyme.version", buffer) != -1);
+    };
+
     int sdk_ver = GetAndroidSDKVersion();
-    if (sdk_ver >= 31 && sdk_ver <= 33) {
+    if (sdk_ver >= 31 && isFlymeOS()) {
         // Inject a hotplug connected event for the primary display.
         RunCommand("service call SurfaceFlinger 1037");
     }
@@ -165,13 +161,13 @@ void RefreshRateTuner::ScreenStateChanged_(const CU::EventTransfer::TransData &t
     if (screenState == ScreenState::SCREEN_OFF) {
         UpdatePolicy_("screenOff");
         WorkerThread_AddWork([this]() {
-            SwitchRefreshRate_();
+            SetIdleRefreshRate_();
         });
     } else {
         UpdatePolicy_("*");
         WorkerThread_AddWork([this]() {
             ResetRefreshRate_();
-            SwitchRefreshRate_();
+            SetActiveRefreshRate_();
         });
     }
 }
@@ -180,6 +176,9 @@ void RefreshRateTuner::TopAppChanged_(const CU::EventTransfer::TransData &transD
 {
     auto appName = CU::EventTransfer::GetData<std::string>(transData);
     UpdatePolicy_(appName);
+    WorkerThread_AddWork([this]() {
+        SetActiveRefreshRate_();
+    });
 }
 
 void RefreshRateTuner::KeyDown_(const CU::EventTransfer::TransData &transData)
@@ -187,7 +186,7 @@ void RefreshRateTuner::KeyDown_(const CU::EventTransfer::TransData &transData)
     keyDownTime_ = GetTimeStampMs();
     if (!active_) {
         WorkerThread_AddWork([this]() {
-            SwitchRefreshRate_();
+            SetActiveRefreshRate_();
         });
     }
 }

@@ -15,7 +15,7 @@ class RefreshRateTuner : public Module {
 
     private:
         std::string configPath_;
-        CU::JSONArray displayModes_;
+        std::unordered_map<int, std::unordered_map<int, int>> displayModeMap_;
         CU::SafeVal<CU::JSONObject> config_;
         int activeDisplayModeIdx_;
         int idleDisplayModeIdx_;
@@ -27,7 +27,8 @@ class RefreshRateTuner : public Module {
         void IdleLoop_();
         void LoadConfig_();
         void UpdatePolicy_(const std::string &appName);
-        void SwitchRefreshRate_();
+        void SetActiveRefreshRate_();
+        void SetIdleRefreshRate_();
         void ResetRefreshRate_();
         void ScreenStateChanged_(const CU::EventTransfer::TransData &transData);
         void TopAppChanged_(const CU::EventTransfer::TransData &transData);

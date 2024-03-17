@@ -18,47 +18,82 @@
 
 namespace CU
 {
-	inline char _GetEscapeChar(char ch) noexcept
+	inline char _GetEscapeChar(const char &ch) noexcept
 	{
-		char ret = ch;
 		switch (ch) {
 			case '\\':
-				ret = '\\';
-				break;
+				return '\\';
 			case '\"':
-				ret = '\"';
-				break;
+				return '\"';
 			case '\'':
-				ret = '\'';
-				break;
+				return '\'';
 			case 'n':
-				ret = '\n';
-				break;
+				return '\n';
 			case 'r':
-				ret = '\r';
-				break;
+				return '\r';
 			case 't':
-				ret = '\t';
-				break;
+				return '\t';
 			case 'b':
-				ret = '\b';
-				break;
+				return '\b';
 			case 'f':
-				ret = '\f';
-				break;
+				return '\f';
 			case 'a':
-				ret = '\a';
-				break;
+				return '\a';
 			case 'v':
-				ret = '\v';
-				break;
+				return '\v';
 			case '/':
-				ret = '/';
-				break;
+				return '/';
 			default:
 				break;
 		}
-		return ret;
+		return ch;
+	}
+
+	inline std::string _StringToJSONRaw(const std::string &str) 
+	{
+		std::string JSONRaw("\"");
+		for (const auto &ch : str) {
+			switch (ch) {
+				case '\\':
+					JSONRaw += "\\\\";
+					break;
+				case '\"':
+					JSONRaw += "\\\"";
+					break;
+				case '\'':
+					JSONRaw += "\\\'";
+					break;
+				case '\n':
+					JSONRaw += "\\n";
+					break;
+				case '\t':
+					JSONRaw += "\\t";
+					break;
+				case '\r':
+					JSONRaw += "\\r";
+					break;
+				case '\f':
+					JSONRaw += "\\f";
+					break;
+				case '\a':
+					JSONRaw += "\\a";
+					break;
+				case '\b':
+					JSONRaw += "\\b";
+					break;
+				case '\v':
+					JSONRaw += "\\v";
+					break;
+				case '/':
+					JSONRaw += "\\/";
+					break;
+				default:
+					JSONRaw += ch;
+					break;
+			}
+		}
+		JSONRaw += '\"';
+		return JSONRaw;
 	}
 
 	class JSONExcept : public std::exception
@@ -197,7 +232,7 @@ namespace CU
 		public:
 			JSONObject();
 			JSONObject(const std::string &JSONString);
-			JSONObject(const std::unordered_map<std::string, JSONItem> &data);
+			JSONObject(const std::unordered_map<std::string, JSONItem> &data, const std::vector<std::string> &order);
 			JSONObject(const JSONObject &other);
 			JSONObject(JSONObject &&other) noexcept;
 			~JSONObject();
@@ -221,6 +256,13 @@ namespace CU
 			std::vector<std::string> order() const;
 			std::string toString() const;
 			std::string toFormatedString() const;
+
+			struct JSONPair
+			{
+				std::string key;
+				JSONItem value;
+			};
+			std::vector<JSONPair> toPairs() const;
 
 		private:
 			std::unordered_map<std::string, JSONItem> data_;
@@ -258,4 +300,4 @@ namespace std
 	};
 }
 
-#endif
+#endif // _CU_JSONOBJECT_
