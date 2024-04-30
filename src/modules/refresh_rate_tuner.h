@@ -5,6 +5,7 @@
 #include "utils/CuEventTransfer.h"
 #include "utils/CuJSONObject.h"
 #include "utils/CuSafeVal.h"
+#include "utils/CuTimer.h"
 
 class RefreshRateTuner : public Module {
     public:
@@ -14,7 +15,8 @@ class RefreshRateTuner : public Module {
         void Start();
 
     private:
-        std::string configPath_;
+        const std::string configPath_;
+        CU::Timer timer_;
         std::unordered_map<int, std::unordered_map<int, int>> displayModeMap_;
         CU::SafeVal<CU::JSONObject> config_;
         int activeDisplayModeIdx_;

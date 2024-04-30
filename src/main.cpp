@@ -41,6 +41,35 @@ void KillOldDaemon(void)
 	}
 }
 
+void StartDaemonWatchDog(const std::string &logPath)
+{
+	int daemon_pid = getpid();
+	fork();
+	if (getpid() != daemon_pid) {
+		SetThreadName("WatchDog");
+		SetTaskSchedPrio(0, 120);
+
+		CU::Logger::Create(CU::Logger::LogLevel::INFO, logPath);
+		for (;;) {
+			if (GetTaskName(daemon_pid) != DAEMON_NAME) {
+				CU::Logger::Info("Daemon stop running.");
+				auto tombstonePath = GetTaskTombstonePath(daemon_pid);
+				if (IsPathExist(tombstonePath)) {
+					CU::Logger::Error("Daemon Crashed (pid=%d).", daemon_pid);
+					CU::Logger::Error("Tombstone path: %s.", tombstonePath.c_str());
+					CU::Logger::Error("-- tombstone start --\n%s", ReadFile(tombstonePath).c_str());
+					CU::Logger::Error("-- tombstone end --");
+					CU::Logger::Flush();
+				}
+				break;
+			}
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+		}
+		std::exit(0);
+	}
+	std::this_thread::sleep_for(std::chrono::seconds(1));
+}
+
 void StartDaemon(const std::string &configPath)
 {
 	if (GetLinuxKernelVersion() < MIN_KERNEL_VERSION) {
@@ -68,10 +97,11 @@ int main(int argc, char* argv[])
 
 	// CuRefreshRate [configPath] [logPath]
 	if (args.size() == 3) {
+		KillOldDaemon();
 		daemon(0, 0);
+		StartDaemonWatchDog(args[2]);
 		CU::Logger::Create(CU::Logger::LogLevel::DEBUG, args[2]);
 		CU::Logger::Info("CuRefreshRateTuner V1 (%d) by chenzyadb.", GetCompileDateCode());
-		KillOldDaemon();
 		StartDaemon(args[1]);
 	}
 

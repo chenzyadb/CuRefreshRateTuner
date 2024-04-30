@@ -26,6 +26,9 @@
 #include <cctype>
 #include <cinttypes>
 
+#define CU_UNUSED(VAL) (void)(VAL)
+#define CU_WCHAR(VAL) L##VAL
+
 inline std::vector<std::string> StrSplit(const std::string &str, const std::string &delimiter)
 {
     std::vector<std::string> strList{};
@@ -44,7 +47,7 @@ inline std::vector<std::string> StrSplit(const std::string &str, const std::stri
     return strList;
 }
 
-inline std::string StrSplitAt(const std::string &str, const std::string &delimiter, const int &targetCount) 
+inline std::string StrSplitAt(const std::string &str, const std::string &delimiter, int targetCount) 
 {
     int count = 0;
     size_t start_pos = 0;
@@ -65,9 +68,9 @@ inline std::string StrSplitAt(const std::string &str, const std::string &delimit
     return {};
 }
 
-inline std::string StrSplitSpaceAt(const std::string &str, const int &targetCount) 
+inline std::string StrSplitSpaceAt(const std::string &str, int targetCount) 
 {
-    static const auto findNextSpace = [](const std::string &s, const size_t &p) -> size_t {
+    static const auto findNextSpace = [](const std::string &s, size_t p) -> size_t {
         if (p >= s.size()) {
             return std::string::npos;
         }
@@ -98,9 +101,9 @@ inline std::string StrSplitSpaceAt(const std::string &str, const int &targetCoun
     return {};
 }
 
-inline std::string StrSplitLineAt(const std::string &str, const int &targetCount) 
+inline std::string StrSplitLineAt(const std::string &str, int targetCount) 
 {
-    static const auto findNextLine = [](const std::string &s, const size_t &p) -> size_t {
+    static const auto findNextLine = [](const std::string &s, size_t p) -> size_t {
         if (p >= s.size()) {
             return std::string::npos;
         }
@@ -303,15 +306,14 @@ inline std::string TrimStr(const std::string &str)
     return trimedStr;
 }
 
-template <typename T>
-inline int RoundNum(const T &num) noexcept
+template <typename _Ty>
+inline int RoundNum(_Ty num) noexcept
 {
     if (num > INT_MAX) {
         return INT_MAX;
     } else if (num < INT_MIN) {
         return INT_MIN;
     }
-
     int intNum = 0;
     int dec = static_cast<int>(num * 10) % 10;
     if (dec >= 5) {
@@ -322,8 +324,8 @@ inline int RoundNum(const T &num) noexcept
     return intNum;
 }
 
-template <typename T>
-inline T AbsVal(const T &num) noexcept
+template <typename _Ty>
+inline _Ty AbsVal(_Ty num) noexcept
 {
     if (num < 0) {
         return -num;
@@ -331,19 +333,18 @@ inline T AbsVal(const T &num) noexcept
     return num;
 }
 
-template <typename T>
-inline T SquareVal(const T &val) noexcept
+template <typename _Ty>
+inline _Ty SquareVal(_Ty val) noexcept
 {
     return (val * val);
 }
 
-template <typename T>
-inline T SqrtVal(const T &val) noexcept
+template <typename _Ty>
+inline _Ty SqrtVal(_Ty val) noexcept
 {
     if (val == 0) {
         return 0;
     }
-
     auto high = static_cast<double>(val), low = 0.0;
     if (val < 1.0) {
         high = 1.0;
@@ -356,82 +357,96 @@ inline T SqrtVal(const T &val) noexcept
             low = mid;
         }
     }
-    return static_cast<T>((low + high) / 2);
+    return static_cast<_Ty>((low + high) / 2);
 }
 
-template <typename T>
-inline T VecMaxItem(const std::vector<T> &vec) noexcept
+template <typename _Ty>
+inline const _Ty &VecMaxItem(const std::vector<_Ty> &vec) noexcept
 {
-    if (vec.size() == 0) {
-        return {};
-    }
-
-    T maxItem{};
+    auto maxIter = vec.begin();
     for (auto iter = vec.begin(); iter < vec.end(); iter++) {
-        if (*iter > maxItem) {
-            maxItem = *iter;
+        if (*iter > *maxIter) {
+            maxIter = iter;
         }
     }
-    return maxItem;
+    return *maxIter;
 }
 
-template <typename T>
-inline T VecMinItem(const std::vector<T> &vec) noexcept
+template <typename _Ty>
+inline const _Ty &VecMinItem(const std::vector<_Ty> &vec) noexcept
 {
-    if (vec.size() == 0) {
-        return {};
-    }
-
-    T minItem{};
+    auto minIter = vec.begin();
     for (auto iter = vec.begin(); iter < vec.end(); iter++) {
-        if (*iter < minItem) {
-            minItem = *iter;
+        if (*iter < *minIter) {
+            minIter = iter;
         }
     }
-    return minItem;
+    return *minIter;
 }
 
-template <typename T>
-inline T VecApproxItem(const std::vector<T> &vec, const T &targetVal) 
+template <typename _Ty>
+inline const _Ty &VecApproxItem(const std::vector<_Ty> &vec, _Ty targetVal) noexcept
 {
-    if (vec.size() == 0) {
-        return {};
-    }
-
-    T approxItem{};
-    T minDiff = std::numeric_limits<T>::max();
+    auto approxIter = vec.begin();
+    _Ty minDiff = std::numeric_limits<_Ty>::max();
     for (auto iter = vec.begin(); iter < vec.end(); iter++) {
-        T diff = std::abs(*iter - targetVal);
+        _Ty diff = std::abs(*iter - targetVal);
         if (diff < minDiff) {
-            approxItem = *iter;
+            approxIter = iter;
             minDiff = diff;
         }
     }
-    return approxItem;
+    return *approxIter;
 }
 
-template <typename T>
-inline std::vector<T> UniqueVec(const std::vector<T> &vec) 
+template <typename _Ty>
+inline std::vector<_Ty> UniqueVec(const std::vector<_Ty> &vec) 
 {
-    std::vector<T> uniquedVec(vec);
+    std::vector<_Ty> uniquedVec(vec);
     std::sort(uniquedVec.begin(), uniquedVec.end());
     auto iter = std::unique(uniquedVec.begin(), uniquedVec.end());
     uniquedVec.erase(iter, uniquedVec.end());
     return uniquedVec;
 }
 
-template <typename T>
-inline T SumVec(const std::vector<T> &vec) noexcept
+template <typename _Ty>
+inline _Ty SumVec(const std::vector<_Ty> &vec) noexcept
 {
-    if (vec.size() == 0) {
-        return {};
-    }
-
-    T sum{};
+    _Ty sum{};
     for (auto iter = vec.begin(); iter < vec.end(); iter++) {
         sum += *iter;
     }
     return sum;
+}
+
+template <typename _Ty>
+inline std::vector<_Ty> ShrinkVec(const std::vector<_Ty> &vec, size_t size) 
+{
+    std::vector<_Ty> trimedVec(vec);
+    std::sort(trimedVec.begin(), trimedVec.end());
+    auto iter = std::unique(trimedVec.begin(), trimedVec.end());
+    trimedVec.erase(iter, trimedVec.end());
+    if (trimedVec.size() <= size) {
+        return trimedVec;
+    }
+    std::vector<_Ty> shrinkedVec{};
+    _Ty itemDiff = (trimedVec.back() - trimedVec.front()) / (size - 1);
+    for (size_t idx = 0; idx < size; idx++) {
+        _Ty selectVal = trimedVec.front() + itemDiff * idx;
+        auto selectIter = trimedVec.begin();
+        _Ty minDiff = trimedVec.back();
+        for (auto iter = trimedVec.begin(); iter < trimedVec.end(); iter++) {
+            _Ty diff = std::abs(*iter - selectVal);
+            if (diff < minDiff) {
+                selectIter = iter;
+                minDiff = diff;
+            } else {
+                break;
+            }
+        }
+        shrinkedVec.emplace_back(*selectIter);
+    }
+    return shrinkedVec;
 }
 
 #if defined(__DATE__)
@@ -534,7 +549,7 @@ inline bool IsPathExist(const std::string &path) noexcept
     return (access(path.c_str(), F_OK) != -1);
 }
 
-inline int GetThreadPid(const int &tid) noexcept
+inline int GetThreadPid(int tid) noexcept
 {
     char statusPath[128] = { 0 };
     snprintf(statusPath, sizeof(statusPath), "/proc/%d/status", tid);
@@ -552,7 +567,7 @@ inline int GetThreadPid(const int &tid) noexcept
 
 enum class TaskType : uint8_t {TASK_OTHER, TASK_FOREGROUND, TASK_VISIBLE, TASK_SERVICE, TASK_SYSTEM, TASK_BACKGROUND};
 
-inline TaskType GetTaskType(const int &pid) noexcept
+inline TaskType GetTaskType(int pid) noexcept
 {
     char oomAdjPath[128] = { 0 };
     snprintf(oomAdjPath, sizeof(oomAdjPath), "/proc/%d/oom_adj", pid);
@@ -579,7 +594,7 @@ inline TaskType GetTaskType(const int &pid) noexcept
     return TaskType::TASK_OTHER;
 }
 
-inline std::string GetTaskName(const int &pid) 
+inline std::string GetTaskName(int pid) 
 {
     char cmdlinePath[128] = { 0 };
     snprintf(cmdlinePath, sizeof(cmdlinePath), "/proc/%d/cmdline", pid);
@@ -593,13 +608,12 @@ inline std::string GetTaskName(const int &pid)
         } else {
             buffer[0] = '\0';
         }
-        std::string taskName(buffer);
-        return taskName; 
+        return buffer; 
     }
     return {};
 }
 
-inline std::string GetTaskComm(const int &pid) 
+inline std::string GetTaskComm(int pid) 
 {
     char cmdlinePath[128] = { 0 };
     snprintf(cmdlinePath, sizeof(cmdlinePath), "/proc/%d/comm", pid);
@@ -613,13 +627,12 @@ inline std::string GetTaskComm(const int &pid)
         } else {
             buffer[0] = '\0';
         }
-        std::string taskComm(buffer);
-        return taskComm;
+        return buffer;
     }
     return {};
 }
 
-inline uint64_t GetThreadRuntime(const int &pid, const int &tid) noexcept
+inline uint64_t GetThreadRuntime(int pid, int tid) noexcept
 {
     char statPath[128] = { 0 };
     snprintf(statPath, sizeof(statPath), "/proc/%d/task/%d/stat", pid, tid);
@@ -672,7 +685,7 @@ inline int FindTaskPid(const std::string &taskName) noexcept
     return taskPid;
 }
 
-inline std::vector<int> GetTaskThreads(const int &pid) 
+inline std::vector<int> GetTaskThreads(int pid) 
 {
     char taskPath[128] = { 0 };
     snprintf(taskPath, sizeof(taskPath), "/proc/%d/task", pid);
@@ -732,7 +745,6 @@ inline int RunCommand(const std::string &command) noexcept
 {
     return system(command.c_str());
 }
-
 
 #if defined(__ANDROID_API__)
 // Android NDK Interface Functions.
@@ -804,9 +816,39 @@ inline std::string GetDeviceSerialNo()
 {
     char buffer[PROP_VALUE_MAX] = { 0 };
     __system_property_get("ro.serialno", buffer);
-    std::string serialNo(buffer);
-    return serialNo;
+    return buffer;
 }
+
+inline std::string GetTaskTombstonePath(int pid)
+{
+    char tombstoneSymbol[16] = { 0 };
+    snprintf(tombstoneSymbol, sizeof(tombstoneSymbol), "pid: %d", pid);
+    struct dirent** entryList = nullptr;
+    int len = scandir("/data/tombstones", &entryList, nullptr, alphasort);
+    if (len < 0) {
+        return {};
+    }
+    for (int pos = 0; pos < len; pos++) {
+        auto entry = *(entryList + pos);
+        if (entry->d_type == DT_REG) {
+            char tombstonePath[128] = { 0 };
+            snprintf(tombstonePath, sizeof(tombstonePath), "/data/tombstones/%s", entry->d_name);
+            int fd = open(tombstonePath, O_RDONLY | O_NONBLOCK);
+            if (fd >= 0) {
+                char buffer[4096] = { 0 };
+                read(fd, buffer, sizeof(buffer));
+                if (strstr(buffer, tombstoneSymbol)) {
+                    return tombstonePath;
+                }
+                close(fd);
+            }
+        }
+        free(entry);
+    }
+    free(entryList);
+    return {};
+}
+
 
 #endif // __ANDROID_API__
 #endif // __unix__

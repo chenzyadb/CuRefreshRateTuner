@@ -21,14 +21,13 @@ target_include_directories(CuRefreshRateTuner PRIVATE ${INCS})
 target_link_libraries(CuRefreshRateTuner PRIVATE c++_static dl)
 
 set(THIS_COMPILE_FLAGS
-    -Wall -Werror -fdata-sections -ffunction-sections -fno-threadsafe-statics -fno-omit-frame-pointer -fno-rtti
-    -fvisibility=hidden -fvisibility-inlines-hidden -O3 -D_GNU_SOURCE
-    -fno-strict-aliasing -fomit-frame-pointer -finline-functions 
-    -march=armv8-a
+    -O3 -march=armv8-a -D_GNU_SOURCE -Wall -Werror -fdata-sections -ffunction-sections -fno-threadsafe-statics
+    -fno-omit-frame-pointer -fno-rtti -fno-strict-aliasing -fomit-frame-pointer -finline-functions -fvisibility=hidden
+    -fvisibility-inlines-hidden   
 )
 set(THIS_LINK_FLAGS
-    -ffixed-x18 -Wl,--hash-style=both -fPIE -Wl,-exclude-libs,ALL -Wl,--gc-sections -static -O3
-    -fvisibility=hidden -fvisibility-inlines-hidden -Wl,--icf=all,--strip-all -march=armv8-a
+    -static -O3 -march=armv8-a,-ffixed-x18 -Wl,--hash-style=both -fPIE -Wl,-exclude-libs,ALL -Wl,--gc-sections 
+    -fvisibility=hidden -fvisibility-inlines-hidden -Wl,--icf=all,--strip-all 
 )
 
 target_compile_options(CuRefreshRateTuner PRIVATE ${THIS_COMPILE_FLAGS})
