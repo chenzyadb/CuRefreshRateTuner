@@ -164,7 +164,8 @@ void RefreshRateTuner::ResetRefreshRate_()
 {
     static const auto isFlymeOS = []() -> bool {
         char buffer[PROP_VALUE_MAX] = { 0 };
-        return (__system_property_get("ro.build.flyme.version", buffer) != -1);
+        __system_property_get("ro.build.flyme.version", buffer);
+        return (atof(buffer) != 0.0);
     };
 
     int sdk_ver = GetAndroidSDKVersion();

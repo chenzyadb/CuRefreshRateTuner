@@ -224,6 +224,51 @@ inline bool StrEmpty(const std::string &str) noexcept
 
 inline int StringToInteger(const std::string &str) noexcept
 {
+    int integer = 0;
+    size_t num_start_pos = -1;
+    bool negative = false;
+    for (size_t pos = 0; pos < str.size(); pos++) {
+        if (num_start_pos == -1) {
+            if (str[pos] >= '0' && str[pos] <= '9') {
+                num_start_pos = pos;
+            } else if (str[pos] == '-') {
+                negative = true;
+                num_start_pos = pos;
+                continue;
+            } else if (str[pos] == '+') {
+                negative = false;
+                num_start_pos = pos;
+                continue;
+            } else if (str[pos] == ' ') {
+                continue;
+            } else {
+                return 0;
+            }
+        }
+        if (num_start_pos != -1) {
+            if (str[pos] >= '0' && str[pos] <= '9') {
+                integer = integer * 10 + str[pos] - '0';
+            } else {
+                if (negative) {
+                    return -integer;
+                }
+                return integer;
+            }
+        }
+        if (!negative && integer >= (INT_MAX / 10) && (pos + 1) < str.size()) {
+            return INT_MAX;
+        } else if (negative && -integer <= (INT_MIN / 10) && (pos + 1) < str.size()) {
+            return INT_MIN;
+        }
+    }
+    if (negative) {
+        return -integer;
+    }
+    return integer;
+}
+
+inline int64_t StringToLong(const std::string &str) noexcept
+{
     int64_t integer = 0;
     size_t num_start_pos = -1;
     bool negative = false;
@@ -255,10 +300,10 @@ inline int StringToInteger(const std::string &str) noexcept
                 return integer;
             }
         }
-        if (!negative && integer > INT_MAX) {
-            return INT_MAX;
-        } else if (negative && -integer < INT_MIN) {
-            return INT_MIN;
+        if (!negative && integer >= (INT64_MAX / 10) && (pos + 1) < str.size()) {
+            return INT64_MAX;
+        } else if (negative && -integer <= (INT64_MIN / 10) && (pos + 1) < str.size()) {
+            return INT64_MIN;
         }
     }
     if (negative) {
@@ -400,13 +445,43 @@ inline const _Ty &VecApproxItem(const std::vector<_Ty> &vec, _Ty targetVal) noex
 }
 
 template <typename _Ty>
-inline std::vector<_Ty> UniqueVec(const std::vector<_Ty> &vec) 
+inline const _Ty &VecApproxMinItem(const std::vector<_Ty> &vec, _Ty targetVal) noexcept
 {
-    std::vector<_Ty> uniquedVec(vec);
-    std::sort(uniquedVec.begin(), uniquedVec.end());
-    auto iter = std::unique(uniquedVec.begin(), uniquedVec.end());
-    uniquedVec.erase(iter, uniquedVec.end());
-    return uniquedVec;
+    auto approxIter = vec.begin();
+    _Ty minDiff = std::numeric_limits<_Ty>::max();
+    for (auto iter = vec.begin(); iter < vec.end(); iter++) {
+        _Ty diff = *iter - targetVal;
+        if (diff < minDiff && diff >= 0) {
+            approxIter = iter;
+            minDiff = diff;
+        }
+    }
+    return *approxIter;
+}
+
+template <typename _Ty>
+inline const _Ty &VecApproxMaxItem(const std::vector<_Ty> &vec, _Ty targetVal) noexcept
+{
+    auto approxIter = vec.begin();
+    _Ty minDiff = std::numeric_limits<_Ty>::max();
+    for (auto iter = vec.begin(); iter < vec.end(); iter++) {
+        _Ty diff = targetVal - *iter;
+        if (diff < minDiff && diff >= 0) {
+            approxIter = iter;
+            minDiff = diff;
+        }
+    }
+    return *approxIter;
+}
+
+template <typename _Ty>
+inline _Ty AverageVec(const std::vector<_Ty> &vec) noexcept
+{
+    _Ty sum{};
+    for (auto iter = vec.begin(); iter < vec.end(); iter++) {
+        sum += *iter;
+    }
+    return (sum / vec.size());
 }
 
 template <typename _Ty>
@@ -417,6 +492,16 @@ inline _Ty SumVec(const std::vector<_Ty> &vec) noexcept
         sum += *iter;
     }
     return sum;
+}
+
+template <typename _Ty>
+inline std::vector<_Ty> UniqueVec(const std::vector<_Ty> &vec) 
+{
+    std::vector<_Ty> uniquedVec(vec);
+    std::sort(uniquedVec.begin(), uniquedVec.end());
+    auto iter = std::unique(uniquedVec.begin(), uniquedVec.end());
+    uniquedVec.erase(iter, uniquedVec.end());
+    return uniquedVec;
 }
 
 template <typename _Ty>
@@ -447,6 +532,14 @@ inline std::vector<_Ty> ShrinkVec(const std::vector<_Ty> &vec, size_t size)
         shrinkedVec.emplace_back(*selectIter);
     }
     return shrinkedVec;
+}
+
+template <typename _Ty>
+std::vector<_Ty> ReverseVec(const std::vector<_Ty> &vec) 
+{
+    std::vector<_Ty> reversedVec(vec);
+    std::reverse(reversedVec.begin(), reversedVec.end());
+    return reversedVec;
 }
 
 #if defined(__DATE__)
@@ -659,51 +752,52 @@ inline int FindTaskPid(const std::string &taskName) noexcept
     int taskPid = -1;
     struct dirent** entryList = nullptr;
     int len = scandir("/proc", &entryList, nullptr, alphasort);
-    if (len < 0) {
-        return -1;
-    }
-    for (int pos = 0; pos < len; pos++) {
-        auto entry = *(entryList + pos);
-        if (taskPid == -1 && entry->d_type == DT_DIR) {
+    if (entryList != nullptr && len > 0) {
+        for (int pos = 0; pos < len; pos++) {
+            auto entry = *(entryList + pos);
+            auto dirType = entry->d_type;
             int pid = atoi(entry->d_name);
-            if (pid > 0 && pid < (INT16_MAX + 1)) {
+            free(entry);
+            if (dirType == DT_DIR && pid > 0 && pid <= INT16_MAX) {
                 char cmdlinePath[128] = { 0 };
                 snprintf(cmdlinePath, sizeof(cmdlinePath), "/proc/%d/cmdline", pid);
                 int fd = open(cmdlinePath, O_RDONLY | O_NONBLOCK);
                 if (fd >= 0) {
                     char cmdline[4096] = { 0 };
                     read(fd, cmdline, sizeof(cmdline));
+                    close(fd);
                     if (strstr(cmdline, taskName.c_str())) {
                         taskPid = pid;
+                        break;
                     }
                 }
             }
         }
-        free(entry);
+        free(entryList);
     }
-    free(entryList);
     return taskPid;
 }
 
 inline std::vector<int> GetTaskThreads(int pid) 
 {
+    std::vector<int> threads{};
     char taskPath[128] = { 0 };
     snprintf(taskPath, sizeof(taskPath), "/proc/%d/task", pid);
     struct dirent** entryList = nullptr;
     int len = scandir(taskPath, &entryList, nullptr, alphasort);
-    if (len < 0) {
-        return {};
-    }
-    std::vector<int> threads{};
-    for (int pos = 0; pos < len; pos++) {
-        auto entry = *(entryList + pos);
-        int tid = atoi(entry->d_name);
-        if (tid > 0 && tid < (INT16_MAX + 1)) {
-            threads.emplace_back(tid);
+    if (entryList != nullptr && len > 0) {
+        for (int pos = 0; pos < len; pos++) {
+            auto entry = *(entryList + pos);
+            if (entry->d_type == DT_DIR) {
+                int tid = atoi(entry->d_name);
+                if (tid > 0 && tid <= INT16_MAX) {
+                    threads.emplace_back(tid);
+                }
+            }
+            free(entry);
         }
-        free(entry);
+        free(entryList);
     }
-    free(entryList);
     return threads;
 }
 
@@ -821,32 +915,53 @@ inline std::string GetDeviceSerialNo()
 
 inline std::string GetTaskTombstonePath(int pid)
 {
-    char tombstoneSymbol[16] = { 0 };
-    snprintf(tombstoneSymbol, sizeof(tombstoneSymbol), "pid: %d", pid);
+    std::string tombstonePath{};
     struct dirent** entryList = nullptr;
     int len = scandir("/data/tombstones", &entryList, nullptr, alphasort);
-    if (len < 0) {
-        return {};
-    }
-    for (int pos = 0; pos < len; pos++) {
-        auto entry = *(entryList + pos);
-        if (entry->d_type == DT_REG) {
-            char tombstonePath[128] = { 0 };
-            snprintf(tombstonePath, sizeof(tombstonePath), "/data/tombstones/%s", entry->d_name);
-            int fd = open(tombstonePath, O_RDONLY | O_NONBLOCK);
-            if (fd >= 0) {
-                char buffer[4096] = { 0 };
-                read(fd, buffer, sizeof(buffer));
-                if (strstr(buffer, tombstoneSymbol)) {
-                    return tombstonePath;
+    if (entryList != nullptr && len > 0) {
+        char tombstoneSymbol[16] = { 0 };
+        snprintf(tombstoneSymbol, sizeof(tombstoneSymbol), "pid: %d", pid);
+        for (int pos = 0; pos < len; pos++) {
+            auto entry = *(entryList + pos);
+            auto dirType = entry->d_type;
+            auto dirPath = std::string("/data/tombstones/") + entry->d_name;
+            free(entry);
+            if (dirType == DT_REG) {
+                int fd = open(dirPath.c_str(), O_RDONLY | O_NONBLOCK);
+                if (fd >= 0) {
+                    char buffer[4096] = { 0 };
+                    read(fd, buffer, sizeof(buffer));
+                    close(fd);
+                    if (strstr(buffer, tombstoneSymbol)) {
+                        tombstonePath = dirPath;
+                        break;
+                    }
                 }
-                close(fd);
             }
         }
-        free(entry);
+        free(entryList);
     }
-    free(entryList);
-    return {};
+    return tombstonePath;
+}
+
+inline std::string FindPath(const std::string &path, const std::string &symbol)
+{
+    std::string matchedPath{};
+    struct dirent** entryList = nullptr;
+    int len = scandir(path.c_str(), &entryList, nullptr, alphasort);
+    if (entryList != nullptr && len > 0) {
+        for (int pos = 0; pos < len; pos++) {
+            auto entry = *(entryList + pos);
+            std::string dirName(entry->d_name);
+            free(entry);
+            if (dirName.find(symbol) != std::string::npos) {
+                matchedPath = path + '/' + dirName;
+                break;
+            }
+        }
+        free(entryList);
+    }
+    return matchedPath;
 }
 
 

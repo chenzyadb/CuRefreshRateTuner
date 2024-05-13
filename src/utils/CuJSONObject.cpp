@@ -9,19 +9,21 @@ CU::JSONItem::_Init_Val CU::JSONItem::_To_Init_Val(const std::string &JSONRaw)
 		return initVal;
 	};
 
-	switch (JSONRaw.front()) {
+	auto rawData = JSONRaw.data();
+	auto len = JSONRaw.length();
+	switch (*rawData) {
 		case '{':
-			if (JSONRaw.back() == '}') {
+			if (*(rawData + len - 1) == '}') {
 				return createInitVal(ItemType::OBJECT, new JSONObject(JSONRaw));
 			}
 			break;
 		case '[':
-			if (JSONRaw.back() == ']') {
+			if (*(rawData + len - 1) == ']') {
 				return createInitVal(ItemType::ARRAY, new JSONArray(JSONRaw));
 			}
 			break;
 		case '\"':
-			if (JSONRaw.back() == '\"') {
+			if (*(rawData + len - 1) == '\"') {
 				return createInitVal(ItemType::STRING, JSONRaw.substr(1, JSONRaw.size() - 2));
 			}
 			break;
@@ -37,7 +39,7 @@ CU::JSONItem::_Init_Val CU::JSONItem::_To_Init_Val(const std::string &JSONRaw)
 		case '8':
 		case '9':
 			{
-				auto num = atof(JSONRaw.c_str());
+				auto num = atof(rawData);
 				if (num != 0) {
 					if (num == static_cast<int64_t>(num)) {
 						if (num > static_cast<double>(INT_MAX) || num < static_cast<double>(INT_MIN)) {
@@ -48,24 +50,26 @@ CU::JSONItem::_Init_Val CU::JSONItem::_To_Init_Val(const std::string &JSONRaw)
 					} else {
 						return createInitVal(ItemType::DOUBLE, num);
 					}
-				} else if (JSONRaw == "0") {
+				} else if (memcmp(rawData, "0", 1) == 0) {
 					return createInitVal(ItemType::INTEGER, 0);
-				} else if (JSONRaw == "0.0") {
+				} else if (memcmp(rawData, "0.0", 3) == 0) {
 					return createInitVal(ItemType::DOUBLE, 0.0);
 				}
 			}
 			break;
 		case 't':
-		case 'f':
-			if (JSONRaw == "true") {
+			if (memcmp(rawData, "true", 4) == 0) {
 				return createInitVal(ItemType::BOOLEAN, true);
-			} else if (JSONRaw == "false") {
+			}
+			break;
+		case 'f':
+			if (memcmp(rawData, "false", 5) == 0) {
 				return createInitVal(ItemType::BOOLEAN, false);
 			}
 			break;
 		case 'n':
-			if (JSONRaw == "null") {
-				return createInitVal(ItemType::ITEM_NULL, ItemNull());
+			if (memcmp(rawData, "null", 4) == 0) {
+				return createInitVal(ItemType::ITEM_NULL, nullptr);
 			}
 			break;
 		default:
@@ -76,8 +80,15 @@ CU::JSONItem::_Init_Val CU::JSONItem::_To_Init_Val(const std::string &JSONRaw)
 
 CU::JSONItem::JSONItem() : 
 	type_(ItemType::ITEM_NULL), 
-	value_(ItemNull()) 
+	value_(nullptr) 
 { }
+
+CU::JSONItem::JSONItem(ItemNull _null) :
+	type_(ItemType::ITEM_NULL),
+	value_(nullptr)
+{ 
+	(void)_null;
+}
 
 CU::JSONItem::JSONItem(const bool &value) :
 	type_(ItemType::BOOLEAN),
@@ -119,13 +130,8 @@ CU::JSONItem::JSONItem(const JSONObject &value) :
 	value_(new JSONObject(value))
 { }
 
-CU::JSONItem::JSONItem(const JSONItem &other) :
-	type_(other.type()),
-	value_(ItemNull())
+CU::JSONItem::JSONItem(const JSONItem &other) : type_(other.type()), value_()
 {
-	if (std::addressof(other) == this) {
-		return;
-	}
 	const auto &other_value = other.value();
 	if (type_ == ItemType::ARRAY) {
 		const auto &jsonArray = *(std::get<JSONArray*>(other_value));
@@ -138,28 +144,23 @@ CU::JSONItem::JSONItem(const JSONItem &other) :
 	}
 }
 
-CU::JSONItem::JSONItem(JSONItem &&other) noexcept :
-	type_(other.type()),
-	value_(ItemNull())
+CU::JSONItem::JSONItem(JSONItem &&other) noexcept : type_(other.type()), value_()
 {
-	if (std::addressof(other) == this) {
-		return;
-	}
-	const auto &other_value = other.value();
+	const auto &otherValue = other.value();
 	if (type_ == ItemType::ARRAY) {
-		const auto &jsonArray = *(std::get<JSONArray*>(other_value));
+		const auto &jsonArray = *(std::get<JSONArray*>(otherValue));
 		value_ = new JSONArray(jsonArray);
 	} else if (type_ == ItemType::OBJECT) {
-		const auto &jsonObject = *(std::get<JSONObject*>(other_value));
+		const auto &jsonObject = *(std::get<JSONObject*>(otherValue));
 		value_ = new JSONObject(jsonObject);
 	} else {
-		value_ = other_value;
+		value_ = otherValue;
 	}
 }
 
 CU::JSONItem::JSONItem(_Init_Val &&initVal) noexcept :
-	type_(initVal.type),
-	value_(initVal.value)
+	type_(std::move(initVal.type)),
+	value_(std::move(initVal.value))
 { }
 
 CU::JSONItem::~JSONItem()
@@ -207,20 +208,20 @@ CU::JSONItem &CU::JSONItem::operator=(const JSONItem &other)
 
 bool CU::JSONItem::operator==(const JSONItem &other) const
 {
-	return (value_ == other.value());
+	return (type_ == other.type() && value_ == other.value());
 }
 
 bool CU::JSONItem::operator!=(const JSONItem &other) const
 {
-	return (value_ != other.value());
+	return (type_ != other.type() || value_ != other.value());
 }
 
-CU::ItemType CU::JSONItem::type() const
+CU::JSONItem::ItemType CU::JSONItem::type() const
 {
 	return type_;
 }
 
-CU::ItemValue CU::JSONItem::value() const
+CU::JSONItem::ItemValue CU::JSONItem::value() const
 {
 	return value_;
 }
@@ -233,7 +234,7 @@ void CU::JSONItem::clear()
 		delete std::get<JSONObject*>(value_);
 	}
 	type_ = ItemType::ITEM_NULL;
-	value_ = ItemNull();
+	value_ = nullptr;
 }
 
 size_t CU::JSONItem::size() const
@@ -251,60 +252,138 @@ size_t CU::JSONItem::size() const
 	return 1;
 }
 
+size_t CU::JSONItem::hash() const
+{
+	switch (type_) {
+		case ItemType::ITEM_NULL:
+			break;
+		case ItemType::BOOLEAN:
+			{
+				std::hash<bool> hashVal{};
+				return hashVal(std::get<bool>(value_));
+			}
+		case ItemType::INTEGER:
+			{
+				std::hash<int> hashVal{};
+				return hashVal(std::get<int>(value_));
+			}
+		case ItemType::LONG:
+			{
+				std::hash<int64_t> hashVal{};
+				return hashVal(std::get<int64_t>(value_));
+			}
+		case ItemType::DOUBLE:
+			{
+				std::hash<double> hashVal{};
+				return hashVal(std::get<double>(value_));
+			}
+		case ItemType::STRING:
+			{
+				std::hash<std::string> hashVal{};
+				return hashVal(std::get<std::string>(value_));
+			}
+		case ItemType::ARRAY:
+			return std::get<CU::JSONArray*>(value_)->hash();
+		case ItemType::OBJECT:
+			return std::get<CU::JSONObject*>(value_)->hash();
+	}
+	return 0;
+}
+
+bool CU::JSONItem::isNull() const
+{
+	return (type_ == ItemType::ITEM_NULL);
+}
+
+bool CU::JSONItem::isBoolean() const
+{
+	return (type_ == ItemType::BOOLEAN);
+}
+
+bool CU::JSONItem::isInt() const
+{
+	return (type_ == ItemType::INTEGER);
+}
+
+bool CU::JSONItem::isLong() const
+{
+	return (type_ == ItemType::LONG);
+}
+
+bool CU::JSONItem::isDouble() const
+{
+	return (type_ == ItemType::DOUBLE);
+}
+
+bool CU::JSONItem::isString() const
+{
+	return (type_ == ItemType::STRING);
+}
+
+bool CU::JSONItem::isArray() const
+{
+	return (type_ == ItemType::ARRAY);
+}
+
+bool CU::JSONItem::isObject() const
+{
+	return (type_ == ItemType::OBJECT);
+}
+
 bool CU::JSONItem::toBoolean() const
 {
-	if (type_ == ItemType::BOOLEAN) {
-		return std::get<bool>(value_);
+	if (type_ != ItemType::BOOLEAN) {
+		throw CU::JSONExcept("Item is not of boolean type");
 	}
-	return {};
+	return std::get<bool>(value_);
 }
 
 int CU::JSONItem::toInt() const
 {
-	if (type_ == ItemType::INTEGER) {
-		return std::get<int>(value_);
+	if (type_ != ItemType::INTEGER) {
+		throw CU::JSONExcept("Item is not of int type");
 	}
-	return {};
+	return std::get<int>(value_);
 }
 
 int64_t CU::JSONItem::toLong() const
 {
-	if (type_ == ItemType::LONG) {
-		return std::get<int64_t>(value_);
+	if (type_ != ItemType::LONG) {
+		throw CU::JSONExcept("Item is not of long type");
 	}
-	return {};
+	return std::get<int64_t>(value_);
 }
 
 double CU::JSONItem::toDouble() const
 {
-	if (type_ == ItemType::DOUBLE) {
-		return std::get<double>(value_);
+	if (type_ != ItemType::DOUBLE) {
+		throw CU::JSONExcept("Item is not of double type");
 	}
-	return {};
+	return std::get<double>(value_);
 }
 
 std::string CU::JSONItem::toString() const
 {
-	if (type_ == ItemType::STRING) {
-		return std::get<std::string>(value_);
+	if (type_ != ItemType::STRING) {
+		throw CU::JSONExcept("Item is not of string type");
 	}
-	return {};
+	return std::get<std::string>(value_);
 }
 
 CU::JSONArray CU::JSONItem::toArray() const
 {
-	if (type_ == ItemType::ARRAY) {
-		return *(std::get<JSONArray*>(value_));
+	if (type_ != ItemType::ARRAY) {
+		throw CU::JSONExcept("Item is not of array type");
 	}
-	return {};
+	return *(std::get<JSONArray*>(value_));
 }
 
 CU::JSONObject CU::JSONItem::toObject() const
 {
-	if (type_ == ItemType::OBJECT) {
-		return *(std::get<JSONObject*>(value_));
+	if (type_ != ItemType::OBJECT) {
+		throw CU::JSONExcept("Item is not of object type");
 	}
-	return {};
+	return *(std::get<JSONObject*>(value_));
 }
 
 std::string CU::JSONItem::toRaw() const
@@ -331,7 +410,7 @@ std::string CU::JSONItem::toRaw() const
 			JSONRaw = std::to_string(std::get<double>(value_));
 			break;
 		case ItemType::STRING:
-			JSONRaw = _StringToJSONRaw(std::get<std::string>(value_));
+			JSONRaw = JSON::_StringToJSONRaw(std::get<std::string>(value_));
 			break;
 		case ItemType::ARRAY:
 			JSONRaw = std::get<JSONArray*>(value_)->toString();
@@ -467,7 +546,7 @@ CU::JSONArray::JSONArray(const std::string &JSONString) : data_()
 			case '\\':
 				if (idx == ArrayIdx::ITEM_STRING) {
 					pos++;
-					content += _GetEscapeChar(JSONString.at(pos));
+					content += JSON::_GetEscapeChar(JSONString.at(pos));
 				} else if (idx == ArrayIdx::ITEM_ARRAY || idx == ArrayIdx::ITEM_OBJECT) {
 					content += ch;
 				} else {
@@ -546,19 +625,9 @@ CU::JSONArray::JSONArray(const std::vector<JSONObject> &list) : data_()
 	}
 }
 
-CU::JSONArray::JSONArray(const JSONArray &other) : data_()
-{
-	if (std::addressof(other) != this) {
-		data_ = other.data();
-	}
-}
+CU::JSONArray::JSONArray(const JSONArray &other) : data_(other.data()) { }
 
-CU::JSONArray::JSONArray(JSONArray &&other) noexcept : data_()
-{
-	if (std::addressof(other) != this) {
-		data_ = other.data();
-	}
-}
+CU::JSONArray::JSONArray(JSONArray &&other) noexcept : data_(other.data()) { }
 
 CU::JSONArray::~JSONArray() { }
 
@@ -725,6 +794,15 @@ void CU::JSONArray::clear()
 size_t CU::JSONArray::size() const
 {
 	return data_.size();
+}
+
+size_t CU::JSONArray::hash() const
+{
+	size_t hashVal = data_.size();
+	for (const auto &item : data_) {
+		hashVal ^= item.hash() + 2654435769 + (hashVal << 6) + (hashVal >> 2);
+	}
+	return hashVal;
 }
 
 bool CU::JSONArray::empty() const
@@ -930,10 +1008,10 @@ CU::JSONObject::JSONObject(const std::string &JSONString) : data_(), order_()
 			case '\\':
 				if (idx == ObjectIdx::KEY_CONTENT) {
 					pos++;
-					key += _GetEscapeChar(JSONString.at(pos));
+					key += JSON::_GetEscapeChar(JSONString.at(pos));
 				} else if (idx == ObjectIdx::VALUE_STRING) {
 					pos++;
-					value += _GetEscapeChar(JSONString.at(pos));
+					value += JSON::_GetEscapeChar(JSONString.at(pos));
 				} else if (idx == ObjectIdx::VALUE_ARRAY || idx == ObjectIdx::VALUE_OBJECT) {
 					value += ch;
 				} else {
@@ -973,21 +1051,15 @@ CU::JSONObject::JSONObject(const std::unordered_map<std::string, JSONItem> &data
 	order_(order)
 { }
 
-CU::JSONObject::JSONObject(const JSONObject &other) : data_(), order_()
-{
-	if (std::addressof(other) != this) {
-		data_ = other.data();
-		order_ = other.order();
-	}
-}
+CU::JSONObject::JSONObject(const JSONObject &other) : 
+	data_(other.data()), 
+	order_(other.order())
+{ }
 
-CU::JSONObject::JSONObject(JSONObject &&other) noexcept : data_(), order_()
-{
-	if (std::addressof(other) != this) {
-		data_ = other.data();
-		order_ = other.order();
-	}
-}
+CU::JSONObject::JSONObject(JSONObject &&other) noexcept : 
+	data_(other.data()), 
+	order_(other.order())
+{ }
 
 CU::JSONObject::~JSONObject() { }
 
@@ -1106,6 +1178,15 @@ size_t CU::JSONObject::size() const
 	return data_.size();
 }
 
+size_t CU::JSONObject::hash() const
+{
+	size_t hashVal = data_.size();
+	for (auto iter = data_.begin(); iter != data_.end(); iter++) {
+		hashVal ^= (iter->second).hash() + 2654435769 + (hashVal << 6) + (hashVal >> 2);
+	}
+	return hashVal;
+}
+
 bool CU::JSONObject::empty() const
 {
 	return (data_.begin() == data_.end());
@@ -1128,15 +1209,15 @@ std::string CU::JSONObject::toString() const
 		return JSONString;
 	} else if ((order_.begin() + 1) == order_.end()) {
 		std::string JSONString("{");
-		JSONString += _StringToJSONRaw(order_.front()) + ":" + data_.at(order_.front()).toRaw() + "}";
+		JSONString += JSON::_StringToJSONRaw(order_.front()) + ":" + data_.at(order_.front()).toRaw() + "}";
 		return JSONString;
 	}
 	std::string JSONString("{");
 	for (auto iter = order_.begin(); iter < (order_.end() - 1); iter++) {
 		const auto &key = *iter;
-		JSONString += _StringToJSONRaw(key) + ":" + data_.at(key).toRaw() + ",";
+		JSONString += JSON::_StringToJSONRaw(key) + ":" + data_.at(key).toRaw() + ",";
 	}
-	JSONString += _StringToJSONRaw(order_.back()) + ":" + data_.at(order_.back()).toRaw() + "}";
+	JSONString += JSON::_StringToJSONRaw(order_.back()) + ":" + data_.at(order_.back()).toRaw() + "}";
 	return JSONString;
 }
 
@@ -1147,15 +1228,15 @@ std::string CU::JSONObject::toFormatedString() const
 		return JSONString;
 	} else if ((order_.begin() + 1) == order_.end()) {
 		std::string JSONString("{\n");
-		JSONString += std::string("  ") + _StringToJSONRaw(order_.front()) + ": " + data_.at(order_.front()).toRaw() + "\n}";
+		JSONString += std::string("  ") + JSON::_StringToJSONRaw(order_.front()) + ": " + data_.at(order_.front()).toRaw() + "\n}";
 		return JSONString;
 	}
 	std::string JSONString("{\n");
 	for (auto iter = order_.begin(); iter < (order_.end() - 1); iter++) {
 		const auto &key = *iter;
-		JSONString += std::string("  ") + _StringToJSONRaw(key) + ": " + data_.at(key).toRaw() + ",\n";
+		JSONString += std::string("  ") + JSON::_StringToJSONRaw(key) + ": " + data_.at(key).toRaw() + ",\n";
 	}
-	JSONString += std::string("  ") + _StringToJSONRaw(order_.back()) + ": " + data_.at(order_.back()).toRaw() + "\n}";
+	JSONString += std::string("  ") + JSON::_StringToJSONRaw(order_.back()) + ": " + data_.at(order_.back()).toRaw() + "\n}";
 	return JSONString;
 }
 

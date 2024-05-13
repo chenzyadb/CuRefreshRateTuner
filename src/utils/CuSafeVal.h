@@ -56,18 +56,6 @@ namespace CU
                 return (val_ != other.data());
             }
 
-            bool operator==(const _Ty &other) const
-            {
-                std::unique_lock<std::mutex> lock(mtx_);
-                return (val_ == other);
-            }
-
-            bool operator!=(const _Ty &other) const
-            {
-                std::unique_lock<std::mutex> lock(mtx_);
-                return (val_ != other);
-            }
-
             _Ty data() const
             {
                 std::unique_lock<std::mutex> lock(mtx_);
