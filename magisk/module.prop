@@ -1,6 +1,6 @@
 id=CuRefreshRateTuner
 name=CuRefreshRateTuner
-version=v1(20240513)
-versionCode=20240513
+version=v1(20240605)
+versionCode=20240605
 author=chenzyadb@github.com
 description=Tune the RefreshRate on Android 10+ ARM64 Devices.

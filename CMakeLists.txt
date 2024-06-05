@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.13)
+cmake_minimum_required (VERSION 3.22)
 project (CuRefreshRateTuner)
 
 set(CMAKE_C_STANDARD 11)
@@ -21,13 +21,13 @@ target_include_directories(CuRefreshRateTuner PRIVATE ${INCS})
 target_link_libraries(CuRefreshRateTuner PRIVATE c++_static dl)
 
 set(THIS_COMPILE_FLAGS
-    -O3 -march=armv8-a -D_GNU_SOURCE -Wall -Werror -fdata-sections -ffunction-sections -fno-threadsafe-statics
-    -fno-omit-frame-pointer -fno-rtti -fno-strict-aliasing -fomit-frame-pointer -finline-functions -fvisibility=hidden
-    -fvisibility-inlines-hidden   
+    -O3 -march=armv8-a -mtune=cortex-a53 -D_GNU_SOURCE -Wall -Werror -fdata-sections -ffunction-sections 
+    -fno-threadsafe-statics -fno-rtti -fno-strict-aliasing -fomit-frame-pointer -finline-functions 
+    -fvisibility=hidden -fvisibility-inlines-hidden -flto
 )
 set(THIS_LINK_FLAGS
-    -static -O3 -march=armv8-a,-ffixed-x18 -Wl,--hash-style=both -fPIE -Wl,-exclude-libs,ALL -Wl,--gc-sections 
-    -fvisibility=hidden -fvisibility-inlines-hidden -Wl,--icf=all,--strip-all 
+    -static -fPIE -O3 -ffixed-x18 -flto -Wl,--hash-style=both -Wl,-exclude-libs,ALL -Wl,--gc-sections 
+    -Wl,--icf=all,-O3,--lto-O3,--strip-all 
 )
 
 target_compile_options(CuRefreshRateTuner PRIVATE ${THIS_COMPILE_FLAGS})

@@ -17,36 +17,40 @@ namespace CU
 	{
 		public:
 			typedef const void* TransData;
+			typedef void* Instance;
 			typedef std::function<void(TransData)> Subscriber;
 
 			template <typename _Ty>
 			static const _Ty &GetData(const TransData &transData)
 			{
-				auto data_ptr = reinterpret_cast<const _Ty*>(transData);
-				return *data_ptr;
+				auto dataPtr = reinterpret_cast<const _Ty*>(transData);
+				return *dataPtr;
 			}
 
 			template <typename _Ty>
 			static void Post(const std::string &event, const _Ty &data)
 			{
 				auto transData = reinterpret_cast<TransData>(std::addressof(data));
-				auto instance = getInstance_();
-				instance->postEvent_(event, transData);
+				GetInstance_()->postEvent_(event, transData);
 			}
 
-			static void Subscribe(const std::string &event, const Subscriber &subscriber) 
+			static void Subscribe(const std::string &event, const Instance &instance, const Subscriber &subscriber)
 			{
-				auto instance = getInstance_();
-				instance->addSubscriber_(event, subscriber);
+				GetInstance_()->addSubscriber_(event, instance, subscriber);
+			}
+
+			static void Unsubscribe(const std::string &event, const Instance &instance)
+			{
+				GetInstance_()->removeSubscriber_(event, instance);
 			}
 
 		private:
-			EventTransfer() : eventSubMap_(), mtx_() { }
+			EventTransfer() : eventSubscribers_(), mtx_() { }
 			EventTransfer(const EventTransfer &other) = delete;
 			EventTransfer(EventTransfer &&other) = delete;
 			EventTransfer &operator=(const EventTransfer &other) = delete;
 
-			static EventTransfer* getInstance_()
+			static EventTransfer* GetInstance_()
 			{
 				static EventTransfer* instance = nullptr;
 				if (instance == nullptr) {
@@ -57,23 +61,41 @@ namespace CU
 
 			void postEvent_(const std::string &event, const TransData &transData)
 			{
-				std::vector<Subscriber> subscribers{};
+				std::unordered_map<Instance, Subscriber> subscribers{};
 				{
 					std::unique_lock<std::mutex> lck(mtx_);
-					subscribers = eventSubMap_[event];
+					auto subscribersIter = eventSubscribers_.find(event);
+					if (subscribersIter == eventSubscribers_.end()) {
+						return;
+					}
+					subscribers = subscribersIter->second;
 				}
-				for (const auto &subscriber : subscribers) {
-					subscriber(transData);
+				for (auto iter = subscribers.begin(); iter != subscribers.end(); iter++) {
+					(iter->second)(transData);
 				}
 			}
 
-			void addSubscriber_(const std::string &event, const Subscriber &subscriber)
+			void addSubscriber_(const std::string &event, const Instance &instance, const Subscriber &subscriber)
 			{
 				std::unique_lock<std::mutex> lck(mtx_);
-				eventSubMap_[event].emplace_back(subscriber);
+				eventSubscribers_[event][instance] = subscriber;
 			}
 
-			std::unordered_map<std::string, std::vector<Subscriber>> eventSubMap_;
+			void removeSubscriber_(const std::string &event, const Instance &instance)
+			{
+				std::unique_lock<std::mutex> lck(mtx_);
+				auto subscribersIter = eventSubscribers_.find(event);
+				if (subscribersIter == eventSubscribers_.end()) {
+					return;
+				}
+				auto &subscribers = subscribersIter->second;
+				auto removeIter = subscribers.find(instance);
+				if (removeIter != subscribers.end()) {
+					subscribers.erase(removeIter);
+				}
+			}
+
+			std::unordered_map<std::string, std::unordered_map<Instance, Subscriber>> eventSubscribers_;
 			std::mutex mtx_;
 	};
 }

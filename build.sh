@@ -16,6 +16,6 @@ cmake \
     -H${SOURCE_DIR} \
     -B${BUILD_DIR} \
     -G "Unix Makefiles"
-cmake --build ${BUILD_DIR} --config "release" --target "CuRefreshRateTuner" -j16
+cmake --build "$BUILD_DIR" --config "release" --target "CuRefreshRateTuner" -j16
 
 exit 0;

@@ -1,11 +1,77 @@
 #pragma once
 
 #define _GNU_SOURCE 1
-#include "libcu.h"
+#include <vector>
+#include <cstring>
+#include <memory>
 #include <sched.h>
 #include <sys/resource.h>
 
-inline void SetTaskSchedPrio(const pid_t &pid, const int &prio) noexcept
+class SchedAffinity {
+	public:
+		static SchedAffinity FromTask(int pid) noexcept
+		{
+			cpu_set_t cpuset{};
+			sched_getaffinity(pid, sizeof(cpu_set_t), std::addressof(cpuset));
+			return SchedAffinity(std::addressof(cpuset));
+		}
+
+		SchedAffinity() noexcept : cpuset_() { }
+
+		SchedAffinity(const std::vector<int> &cpuList) noexcept : cpuset_()
+		{
+			for (const int &cpu : cpuList) {
+				if (cpu < CPU_SETSIZE) {
+					CPU_SET(cpu, std::addressof(cpuset_));
+				}
+			}
+		}
+
+		SchedAffinity(const cpu_set_t* cpuset) noexcept : cpuset_() {
+			memcpy(std::addressof(cpuset_), cpuset, sizeof(cpu_set_t));
+		}
+
+		SchedAffinity(const SchedAffinity &other) noexcept : cpuset_() {
+			memcpy(std::addressof(cpuset_), other.cpuset(), sizeof(cpu_set_t));
+		}
+
+		SchedAffinity(SchedAffinity &&other) noexcept : cpuset_() {
+			memcpy(std::addressof(cpuset_), other.cpuset(), sizeof(cpu_set_t));
+		}
+
+		SchedAffinity &operator=(const SchedAffinity &other) noexcept
+		{
+			if (std::addressof(other) != this) {
+				memcpy(std::addressof(cpuset_), other.cpuset(), sizeof(cpu_set_t));
+			}
+			return *this;
+		}
+
+		bool operator==(const SchedAffinity &other) const noexcept
+		{
+			return (memcmp(std::addressof(cpuset_), other.cpuset(), sizeof(cpu_set_t)) == 0);
+		}
+
+		bool operator!=(const SchedAffinity &other) const noexcept
+		{
+			return (memcmp(std::addressof(cpuset_), other.cpuset(), sizeof(cpu_set_t)) != 0);
+		}
+
+		void toTask(int pid) const noexcept
+		{
+			sched_setaffinity(pid, sizeof(cpu_set_t), std::addressof(cpuset_));
+		}
+
+		const cpu_set_t* cpuset() const noexcept
+		{
+			return std::addressof(cpuset_);
+		}
+
+	private:
+		cpu_set_t cpuset_;
+};
+
+inline void SetTaskSchedPrio(int pid, int prio) noexcept
 {
 	if (prio <= 99 && prio >= 1) {
         struct sched_param schedParam{};
@@ -19,7 +85,7 @@ inline void SetTaskSchedPrio(const pid_t &pid, const int &prio) noexcept
 	}
 }
 
-inline int GetTaskSchedPrio(const pid_t &pid) noexcept
+inline int GetTaskSchedPrio(int pid) noexcept
 {
 	int policy = sched_getscheduler(pid);
     if (policy == SCHED_NORMAL) {
@@ -30,42 +96,4 @@ inline int GetTaskSchedPrio(const pid_t &pid) noexcept
     	return (100 - schedParam.sched_priority);
 	}
 	return -1;
-}
-
-inline cpu_set_t MakeCpuset(const std::vector<int> &cpus) noexcept
-{
-	cpu_set_t cpuset{};
-	CPU_ZERO(&cpuset);
-	for (const int &cpu : cpus) {
-		CPU_SET(cpu, &cpuset);
-	}
-	return cpuset;
-}
-
-inline void SetTaskSchedAffinity(const pid_t &pid, const cpu_set_t &cpuset) noexcept
-{
-	sched_setaffinity(pid, sizeof(cpu_set_t), &cpuset);
-}
-
-inline cpu_set_t GetTaskSchedAffinity(const pid_t &pid) noexcept
-{
-	cpu_set_t cpuset{};
-	sched_getaffinity(pid, sizeof(cpu_set_t), &cpuset);
-	return cpuset;
-}
-
-inline bool CpusetEquals(const cpu_set_t &cpuset1, const cpu_set_t &cpuset2) noexcept
-{
-	return CPU_EQUAL(&cpuset1, &cpuset2);
-}
-
-inline void SetTaskCpuset(const int &pid, const std::string &cpuset)
-{
-	WriteFile(StrMerge("/dev/cpuset%s/cgroup.procs", cpuset.c_str()), StrMerge("%d\n", pid));
-}
-
-inline std::string GetTaskCpuset(const int &pid)
-{
-	auto cgroup = ReadFile(StrMerge("/proc/%d/cgroup", pid));
-	return GetPrevString(GetPostString(cgroup, "cpuset:"), "\n");
 }

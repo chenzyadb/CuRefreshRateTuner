@@ -16,9 +16,6 @@ class CgroupWatcher : public Module
 	private:
 		ScreenState screenState_;
 
-		void TopAppModified_();
-		void ForegroundModified_();
-		void BackgroundModified_();
-		void RestrictedModified_();
+		void CgroupModified_();
 		void CheckScreenState_();
 };

@@ -7,10 +7,10 @@
 #include <exception>
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <memory>
 #include <functional>
 #include <cstring>
-#include <cctype>
 
 namespace CU
 {
@@ -31,159 +31,127 @@ namespace CU
 	class StringMatcher
 	{
 		public:
-			struct MatchRule
+			enum class MatchIndex : uint8_t {FRONT, MIDDLE, BACK, ENTIRE};
+
+			StringMatcher() : matchRule_(), matchAll_(false) { }
+
+			StringMatcher(const std::string &ruleText) : matchRule_(), matchAll_(false)
 			{
-				MatchRule() : 
-					matchAll(false), 
-					front(), 
-					middle(), 
-					back(), 
-					entire(), 
-					hashVal(0) 
-				{ }
-
-				MatchRule(const MatchRule &other) : 
-					matchAll(other.matchAll),
-					front(other.front), 
-					middle(other.middle),
-					back(other.back), 
-					entire(other.entire),
-					hashVal(other.hashVal)
-				{ }
-
-				MatchRule(MatchRule &&other) noexcept :
-					matchAll(other.matchAll),
-					front(other.front),
-					middle(other.middle),
-					back(other.back),
-					entire(other.entire),
-					hashVal(other.hashVal)
-				{ }
-
-				MatchRule &operator=(const MatchRule &other)
-				{
-					if (std::addressof(other) != this) {
-						matchAll = other.matchAll;
-						front = other.front;
-						middle = other.middle;
-						back = other.back;
-						entire = other.entire;
-						hashVal = other.hashVal;
-					}
-					return *this;
+				if (ruleText.size() == 0) {
+					return;
 				}
-
-				bool matchAll;
-				std::vector<std::string> front;
-				std::vector<std::string> middle;
-				std::vector<std::string> back;
-				std::vector<std::string> entire;
-				size_t hashVal;
-			};
-
-			StringMatcher() : rule_() { }
-
-			StringMatcher(const std::string &ruleText) : rule_()
-			{
 				if (ruleText == "*") {
-					rule_.matchAll = true;
-				} else {
-					rule_.matchAll = false;
+					matchAll_ = true;
+					return;
 				}
-				if (!rule_.matchAll) {
-					enum class RuleIdx : uint8_t {RULE_FRONT, RULE_CONTENT, RULE_SET, RULE_BACK};
-					RuleIdx idx = RuleIdx::RULE_FRONT;
-					std::string ruleContent{};
-					bool matchFront = true, matchBack = true;
-					size_t pos = 0;
-					while (pos < ruleText.size()) {
-						switch (ruleText[pos]) {
-							case '*':
-								if (idx == RuleIdx::RULE_FRONT && matchFront) {
-									matchFront = false;
-								} else if (idx == RuleIdx::RULE_CONTENT && matchBack) {
-									matchBack = false;
-								} else {
-									throw MatchExcept("Invalid matching rule");
-								}
-								break;
-							case '|':
-								if (idx == RuleIdx::RULE_CONTENT) {
-									idx = RuleIdx::RULE_BACK;
-								} else if (idx == RuleIdx::RULE_SET) {
-									ruleContent += ruleText[pos];
-								} else {
-									throw MatchExcept("Invalid matching rule");
-								}
-								break;
-							case '(':
-								if (idx == RuleIdx::RULE_FRONT) {
-									idx = RuleIdx::RULE_SET;
-								} else {
-									throw MatchExcept("Invalid matching rule");
-								}
-								break;
-							case ')':
-								if (idx == RuleIdx::RULE_SET) {
-									idx = RuleIdx::RULE_CONTENT;
-								} else {
-									throw MatchExcept("Invalid matching rule");
-								}
-								break;
-							default:
-								if (idx == RuleIdx::RULE_FRONT) {
-									idx = RuleIdx::RULE_CONTENT;
-								}
-								ruleContent += ruleText[pos];
-								break;
-						}
-						if (idx == RuleIdx::RULE_BACK || pos == (ruleText.size() - 1)) {
-							auto rules = parseRuleContent_(ruleContent);
-							if (matchFront && matchBack) {
-								auto &entire = rule_.entire;
-								entire.insert(entire.end(), rules.begin(), rules.end());
-							} else if (matchFront && !matchBack) {
-								auto &front = rule_.front;
-								front.insert(front.end(), rules.begin(), rules.end());
-							} else if (!matchFront && matchBack) {
-								auto &back = rule_.back;
-								back.insert(back.end(), rules.begin(), rules.end());
-							} else {
-								auto &middle = rule_.middle;
-								middle.insert(middle.end(), rules.begin(), rules.end());
+				enum class RuleIdx : uint8_t {RULE_FRONT, RULE_CONTENT, RULE_SET, RULE_BACK};
+				auto idx = RuleIdx::RULE_FRONT;
+				std::string ruleContent{};
+				bool matchFront = true, matchBack = true;
+				size_t pos = 0;
+				while (pos < ruleText.size()) {
+					switch (ruleText[pos]) {
+						case '\\':
+							if ((pos + 1) == ruleText.size()) {
+								throw MatchExcept("Invalid matching rule");
 							}
-							matchFront = true, matchBack = true;
-							ruleContent.clear();
-							idx = RuleIdx::RULE_FRONT;
-						}
-						pos++;
+							if (idx == RuleIdx::RULE_FRONT) {
+								idx = RuleIdx::RULE_CONTENT;
+							}
+							pos++;
+							ruleContent += ruleText[pos];
+							break;
+						case '*':
+							if (idx == RuleIdx::RULE_FRONT && matchFront) {
+								matchFront = false;
+							} else if (idx == RuleIdx::RULE_CONTENT && matchBack) {
+								matchBack = false;
+							} else {
+								throw MatchExcept("Invalid matching rule");
+							}
+							break;
+						case '|':
+							if (idx == RuleIdx::RULE_CONTENT) {
+								idx = RuleIdx::RULE_BACK;
+							} else if (idx == RuleIdx::RULE_SET) {
+								ruleContent += ruleText[pos];
+							} else {
+								throw MatchExcept("Invalid matching rule");
+							}
+							break;
+						case '(':
+							if (idx == RuleIdx::RULE_FRONT) {
+								idx = RuleIdx::RULE_SET;
+							} else {
+								throw MatchExcept("Invalid matching rule");
+							}
+							break;
+						case ')':
+							if (idx == RuleIdx::RULE_SET) {
+								idx = RuleIdx::RULE_CONTENT;
+							} else {
+								throw MatchExcept("Invalid matching rule");
+							}
+							break;
+						default:
+							if (idx == RuleIdx::RULE_FRONT) {
+								idx = RuleIdx::RULE_CONTENT;
+							}
+							ruleContent += ruleText[pos];
+							break;
 					}
+					if (idx == RuleIdx::RULE_BACK || pos == (ruleText.size() - 1)) {
+						auto rules = ParseRuleContent_(ruleContent);
+						if (matchFront && matchBack) {
+							auto &entire = matchRule_[MatchIndex::ENTIRE];
+							entire.insert(entire.end(), rules.begin(), rules.end());
+						} else if (matchFront && !matchBack) {
+							auto &front = matchRule_[MatchIndex::FRONT];
+							front.insert(front.end(), rules.begin(), rules.end());
+						} else if (!matchFront && matchBack) {
+							auto &back = matchRule_[MatchIndex::BACK];
+							back.insert(back.end(), rules.begin(), rules.end());
+						} else {
+							auto &middle = matchRule_[MatchIndex::MIDDLE];
+							middle.insert(middle.end(), rules.begin(), rules.end());
+						}
+						matchFront = true, matchBack = true;
+						ruleContent.clear();
+						idx = RuleIdx::RULE_FRONT;
+					}
+					pos++;
 				}
-				rule_.hashVal = std::hash<std::string>()(ruleText);
 			}
 
-			StringMatcher(const StringMatcher &other) : rule_(other.rule()) { }
+			StringMatcher(const StringMatcher &other) : 
+				matchRule_(other._Get_MatchRule()),
+				matchAll_(other._Is_MatchAll())
+			{ }
 
-			StringMatcher(StringMatcher &&other) noexcept : rule_(other.rule()) { }
+			StringMatcher(StringMatcher &&other) noexcept : 
+				matchRule_(other._Get_MatchRule()),
+				matchAll_(other._Is_MatchAll())
+			{ }
 
 			~StringMatcher() { }
 
 			StringMatcher &operator=(const StringMatcher &other)
 			{
 				if (std::addressof(other) != this) {
-					rule_ = other.rule();
+					matchRule_ = other._Get_MatchRule();
+					matchAll_ = other._Is_MatchAll();
 				}
 				return *this;
 			}
 
 			bool operator==(const StringMatcher &other) const
 			{
-				return (rule_.hashVal == other.rule().hashVal);
+				return (matchAll_ == other._Is_MatchAll() && matchRule_ == other._Get_MatchRule());
 			}
 
 			bool operator!=(const StringMatcher &other) const
 			{
-				return (rule_.hashVal != other.rule().hashVal);
+				return (matchAll_ != other._Is_MatchAll() || matchRule_ != other._Get_MatchRule());
 			}
 
 			bool match(const std::string &str) const
@@ -200,56 +168,65 @@ namespace CU
 					if (s_len < p_len) {
 						return false;
 					}
-					return (memcmp(s.data() + (s_len - p_len), p.data(), p_len) == 0);
-				};
-				static const auto matchEntire = [](const std::string &s, const std::string &p) -> bool {
-					size_t len = p.size();
-					if (s.size() != len) {
-						return false;
-					}
-					return (memcmp(s.data(), p.data(), len) == 0);
+					return (memcmp((s.data() + (s_len - p_len)), p.data(), p_len) == 0);
 				};
 
+				if (matchAll_) {
+					return true;
+				}
 				if (str.empty()) {
 					return false;
 				}
-				for (const auto &key : rule_.middle) {
-					if (str.find(key) != std::string::npos) {
-						return true;
+				if (matchRule_.count(MatchIndex::FRONT) == 1) {
+					const auto &front = matchRule_.at(MatchIndex::FRONT);
+					for (const auto &key : front) {
+						if (matchFront(str, key)) {
+							return true;
+						}
 					}
 				}
-				for (const auto &key : rule_.front) {
-					if (matchFront(str, key)) {
-						return true;
+				if (matchRule_.count(MatchIndex::BACK) == 1) {
+					const auto &back = matchRule_.at(MatchIndex::BACK);
+					for (const auto &key : back) {
+						if (matchBack(str, key)) {
+							return true;
+						}
 					}
 				}
-				for (const auto &key : rule_.back) {
-					if (matchBack(str, key)) {
-						return true;
+				if (matchRule_.count(MatchIndex::ENTIRE) == 1) {
+					const auto &entire = matchRule_.at(MatchIndex::ENTIRE);
+					for (const auto &key : entire) {
+						if (str == key) {
+							return true;
+						}
 					}
 				}
-				for (const auto &key : rule_.entire) {
-					if (matchEntire(str, key)) {
-						return true;
+				if (matchRule_.count(MatchIndex::MIDDLE) == 1) {
+					const auto &middle = matchRule_.at(MatchIndex::MIDDLE);
+					for (const auto &key : middle) {
+						if (str.find(key) != std::string::npos) {
+							return true;
+						}
 					}
 				}
-				return rule_.matchAll;
+				return false;
 			}
 
-			const MatchRule &rule() const
+			std::unordered_map<MatchIndex, std::vector<std::string>> _Get_MatchRule() const
 			{
-				return rule_;
+				return matchRule_;
 			}
 
-			size_t hash() const
+			bool _Is_MatchAll() const
 			{
-				return rule_.hashVal;
+				return matchAll_;
 			}
 
 		private:
-			MatchRule rule_;
+			std::unordered_map<MatchIndex, std::vector<std::string>> matchRule_;
+			bool matchAll_;
 
-			std::vector<std::string> parseRuleContent_(const std::string &content)
+			static std::vector<std::string> ParseRuleContent_(const std::string &content)
 			{
 				std::vector<std::string> rules{};
 				size_t pos = 0, len = content.size();
@@ -259,8 +236,8 @@ namespace CU
 						next_pos = len;
 					}
 					auto rule = content.substr(pos, next_pos - pos);
-					if (rule.find('[') != std::string::npos) {
-						auto parsedRules = parseCharSet_(rule);
+					if (rule.find('[') != std::string::npos && rule.find(']') != std::string::npos) {
+						auto parsedRules = ParseCharsets_(rule);
 						rules.insert(rules.end(), parsedRules.begin(), parsedRules.end());
 					} else {
 						rules.emplace_back(rule);
@@ -270,56 +247,67 @@ namespace CU
 				return rules;
 			}
 
-			std::vector<std::string> parseCharSet_(const std::string &str)
+			static std::vector<std::string> ParseCharsets_(const std::string &str)
 			{
-				static const auto getCharSet = [](const std::string &str) -> std::string {
-					if (str.size() == 3 && str[1] == '-' && isalnum(str[0]) != 0 && isalnum(str[2]) != 0) {
-						std::string charSet{};
-						for (auto ch = str[0]; ch <= str[2]; ch++) {
-							charSet += ch;
-						}
-						return charSet;
-					} else if (str.size() == 2 && isalnum(str[0]) != 0 && isalnum(str[1]) != 0) {
-						return str;
-					}
-					return {};
-				};
-
-				std::vector<std::string> parsedRules(1, str);
+				std::vector<std::string> parsedRules{};
+				parsedRules.emplace_back(str);
 				size_t pos = 0;
 				while (pos < parsedRules[0].size()) {
-					auto set_begin = parsedRules[0].find('[');
-					auto set_end = parsedRules[0].find(']');
-					if (set_end != std::string::npos && set_begin < (set_end - 1)) {
-						auto charSet = getCharSet(parsedRules[0].substr(set_begin + 1, set_end - set_begin - 1));
-						std::vector<std::string> newParsedRules{};
+					auto set_begin = parsedRules[0].find('[', pos);
+					if (set_begin == std::string::npos) {
+						break;
+					}
+					auto set_end = parsedRules[0].find(']', set_begin + 1);
+					if (set_end != std::string::npos) {
+						auto charSet = GetCharset_(parsedRules[0].substr(set_begin + 1, set_end - set_begin - 1));
+						std::vector<std::string> expandedRules{};
 						for (const auto &rule : parsedRules) {
 							auto frontStr = rule.substr(0, set_begin);
 							auto backStr = rule.substr(set_end + 1);
 							for (const auto &ch : charSet) {
-								newParsedRules.emplace_back(frontStr + ch + backStr);
+								expandedRules.emplace_back(frontStr + ch + backStr);
 							}
 						}
-						parsedRules = newParsedRules;
+						parsedRules = expandedRules;
 					} else {
 						break;
 					}
-					pos = set_begin;
+					pos = set_begin + 1;
 				}
 				return parsedRules;
 			}
-	};
-}
 
-namespace std
-{
-	template<>
-	struct hash<CU::StringMatcher>
-	{
-		size_t operator()(const CU::StringMatcher &val) const
-		{
-			return val.hash();
-		}
+			static std::string GetCharset_(const std::string &content)
+			{
+				static const auto isCharRange = [](char start_ch, char end_ch) -> bool {
+					if (start_ch >= '0' && start_ch <= '9' && end_ch >= '0' && end_ch <= '9') {
+						return true;
+					}
+					if (start_ch >= 'A' && start_ch <= 'Z' && end_ch >= 'A' && end_ch <= 'Z') {
+						return true;
+					}
+					if (start_ch >= 'a' && start_ch <= 'z' && end_ch >= 'a' && end_ch <= 'z') {
+						return true;
+					}
+					return false;
+				};
+
+				std::string charSet{};
+				for (size_t pos = 0; pos < content.size(); pos++) {
+					if (content[pos] == '-' && pos > 0 && (pos + 1) < content.size()) {
+						if (isCharRange(content[pos - 1], content[pos + 1])) {
+							for (char ch = (content[pos - 1] + 1); ch < content[pos + 1]; ch++) {
+								charSet += ch;
+							}
+						} else {
+							charSet += content[pos];
+						}
+					} else {
+						charSet += content[pos];
+					}
+				}
+				return charSet;
+			}
 	};
 }
 

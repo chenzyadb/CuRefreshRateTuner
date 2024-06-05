@@ -4,7 +4,7 @@
 
 constexpr char DAEMON_NAME[] = "CuRefreshRateTuner";
 constexpr int MIN_KERNEL_VERSION = 318000;
-constexpr int MIN_ANDROID_SDK = 29;
+constexpr int MIN_ANDROID_SDK = __ANDROID_API_Q__;
 
 std::vector<std::string> ParseArgs(int argc, char* argv[])
 {

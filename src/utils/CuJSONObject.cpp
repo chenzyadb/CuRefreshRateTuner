@@ -545,6 +545,9 @@ CU::JSONArray::JSONArray(const std::string &JSONString) : data_()
 				break;
 			case '\\':
 				if (idx == ArrayIdx::ITEM_STRING) {
+					if ((pos + 1) == JSONString.size()) {
+						throw JSONExcept("Invalid JSONArray Structure");
+					}
 					pos++;
 					content += JSON::_GetEscapeChar(JSONString.at(pos));
 				} else if (idx == ArrayIdx::ITEM_ARRAY || idx == ArrayIdx::ITEM_OBJECT) {
@@ -1007,9 +1010,15 @@ CU::JSONObject::JSONObject(const std::string &JSONString) : data_(), order_()
 				break;
 			case '\\':
 				if (idx == ObjectIdx::KEY_CONTENT) {
+					if ((pos + 1) == JSONString.size()) {
+						throw JSONExcept("Invalid JSONObject Structure");
+					}
 					pos++;
 					key += JSON::_GetEscapeChar(JSONString.at(pos));
 				} else if (idx == ObjectIdx::VALUE_STRING) {
+					if ((pos + 1) == JSONString.size()) {
+						throw JSONExcept("Invalid JSONObject Structure");
+					}
 					pos++;
 					value += JSON::_GetEscapeChar(JSONString.at(pos));
 				} else if (idx == ObjectIdx::VALUE_ARRAY || idx == ObjectIdx::VALUE_OBJECT) {
