@@ -581,7 +581,7 @@ inline std::string GetTaskCgroupType(int pid, const std::string &cgroup)
     if (!cgroupContent.empty()) {
         auto begin_pos = cgroupContent.find(cgroup);
         if (begin_pos != std::string::npos) {
-            begin_pos = begin_pos + cgroup.length() + 2;
+            begin_pos = begin_pos + cgroup.length() + 1;
             auto end_pos = cgroupContent.find('\n', begin_pos);
             if (end_pos == std::string::npos) {
                 end_pos = cgroupContent.length();
