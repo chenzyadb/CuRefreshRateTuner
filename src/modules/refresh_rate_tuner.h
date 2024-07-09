@@ -1,11 +1,14 @@
 #include "platform/module.h"
 #include "utils/libcu.h"
-#include "utils/cu_sched.h"
+#include "utils/CuSched.h"
 #include "utils/CuLogger.h"
 #include "utils/CuEventTransfer.h"
 #include "utils/CuJSONObject.h"
 #include "utils/CuSafeVal.h"
 #include "utils/CuTimer.h"
+#include "utils/CuFile.h"
+#include "utils/CuPairList.h"
+#include "utils/android_platform.h"
 
 class RefreshRateTuner : public Module {
     public:
@@ -15,12 +18,12 @@ class RefreshRateTuner : public Module {
         void Start();
 
     private:
-        const std::string configPath_;
+        std::string configPath_;
         CU::Timer timer_;
-        std::unordered_map<int, std::unordered_map<int, int>> displayModeMap_;
+        CU::PairList<int, CU::PairList<int, int>> displayModeMap_;
         CU::SafeVal<CU::JSONObject> config_;
-        int activeDisplayModeIdx_;
-        int idleDisplayModeIdx_;
+        int activeDisplayModeId_;
+        int idleDisplayModeId_;
         uint64_t keyDownTime_;
         uint64_t keyUpTime_;
         bool active_;

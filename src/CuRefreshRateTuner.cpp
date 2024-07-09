@@ -16,7 +16,7 @@ void CuRefreshRateTuner::Run(const std::string &configPath)
 		Init_(configPath);
 	} catch (const std::exception &e) {
 		CU::Logger::Error("Something went wrong while loading.");
-		CU::Logger::Error("Exception Thrown: %s.", e.what());
+		CU::Logger::Error("Exception Thrown: {}.", e.what());
 		CU::Logger::Flush();
 		std::exit(0);
 	}
@@ -33,12 +33,12 @@ void CuRefreshRateTuner::Init_(const std::string &configPath)
 	}
 
 	{
-		auto proc = StrMerge("%d\n", getpid());
-		WriteFile("/dev/cpuset/system-background/cgroup.procs", proc);
-		WriteFile("/dev/cpuctl/cgroup.procs", proc);
-		WriteFile("/dev/stune/cgroup.procs", proc);
+		auto proc = CU::Format("{}\n", getpid());
+		CU::WriteFile("/dev/cpuset/system-background/cgroup.procs", proc);
+		CU::WriteFile("/dev/cpuctl/cgroup.procs", proc);
+		CU::WriteFile("/dev/stune/cgroup.procs", proc);
 	}
 
-	CU::Logger::Info("Daemon Running (pid=%d).", getpid());
+	CU::Logger::Info("Daemon Running (pid={}).", getpid());
 	CU::EventTransfer::Post("Main.InitFinished", 0);
 }

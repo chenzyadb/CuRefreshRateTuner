@@ -2,9 +2,10 @@
 
 #include "platform/module.h"
 #include "utils/libcu.h"
-#include "utils/cu_sched.h"
+#include "utils/CuSched.h"
 #include "utils/CuLogger.h"
 #include "utils/CuEventTransfer.h"
+#include "utils/CuFile.h"
 #include <linux/input.h>
 
 class InputListener : public Module

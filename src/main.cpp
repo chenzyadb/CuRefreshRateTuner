@@ -3,8 +3,6 @@
 #include "utils/libcu.h"
 
 constexpr char DAEMON_NAME[] = "CuRefreshRateTuner";
-constexpr int MIN_KERNEL_VERSION = 318000;
-constexpr int MIN_ANDROID_SDK = __ANDROID_API_Q__;
 
 std::vector<std::string> ParseArgs(int argc, char* argv[])
 {
@@ -17,28 +15,34 @@ std::vector<std::string> ParseArgs(int argc, char* argv[])
 		argv_size += arg.size() + 1;
 	}
 	memset(argv[0], 0, argv_size);
-	strcpy(argv[0], DAEMON_NAME);
+	strncpy(argv[0], DAEMON_NAME, sizeof(DAEMON_NAME));
 	return args;
 }
 
 void KillOldDaemon(void)
 {
-	int myPid = getpid();
-	auto dir = opendir("/proc");
-	if (dir) {
-		for (auto entry = readdir(dir); entry != nullptr; entry = readdir(dir)) {
-			if (entry->d_type == DT_DIR) {
-				int taskPid = atoi(entry->d_name);
-				if (taskPid > 0 && taskPid < (INT16_MAX + 1)) {
-					auto taskName = GetTaskName(taskPid);
-					if (taskName == DAEMON_NAME && taskPid != myPid) {
-						kill(taskPid, SIGINT);
-					}
-				}
+	int daemon_pid = getpid();
+	auto procs = CU::ListFile("/proc", DT_DIR);
+	for (const auto &proc : procs) {
+		int pid = CU::StrToInt(proc);
+		if (pid > 0 && pid <= INT16_MAX) {
+			if (pid != daemon_pid && CU::ReadFile(CU::Format("/proc/{}/cmdline", pid)) == DAEMON_NAME) {
+				kill(pid, SIGKILL);
 			}
-		}
-		closedir(dir);
+		} 
 	}
+}
+
+std::string GetTaskTombstonePath(int pid) 
+{
+	auto tombstonePaths = CU::ListPath("/data/tombstones");
+	auto tombstoneSymbol = CU::Format("pid: {}", pid);
+	for (const auto &tombstonePath : tombstonePaths) {
+		if (CU::StrContains(CU::ReadFile(tombstonePath), tombstoneSymbol)) {
+			return tombstonePath;
+		}
+	}
+	return {};
 }
 
 void StartDaemonWatchDog(const std::string &logPath)
@@ -46,54 +50,43 @@ void StartDaemonWatchDog(const std::string &logPath)
 	int daemon_pid = getpid();
 	fork();
 	if (getpid() != daemon_pid) {
-		SetThreadName("WatchDog");
-		SetTaskSchedPrio(0, 120);
+		CU::SetThreadName("WatchDog");
+		CU::SetTaskSchedPrio(0, 120);
 
 		CU::Logger::Create(CU::Logger::LogLevel::INFO, logPath);
 		for (;;) {
-			if (GetTaskName(daemon_pid) != DAEMON_NAME) {
+			if (CU::ReadFile(CU::Format("/proc/{}/cmdline", daemon_pid)) != DAEMON_NAME) {
 				CU::Logger::Info("Daemon stop running.");
 				auto tombstonePath = GetTaskTombstonePath(daemon_pid);
-				if (IsPathExist(tombstonePath)) {
-					CU::Logger::Error("Daemon Crashed (pid=%d).", daemon_pid);
-					CU::Logger::Error("Tombstone path: %s.", tombstonePath.c_str());
-					CU::Logger::Error("-- tombstone start --\n%s", ReadFile(tombstonePath).c_str());
+				if (CU::IsPathExists(tombstonePath)) {
+					CU::Logger::Error("Daemon Crashed (pid={}).", daemon_pid);
+					CU::Logger::Error("Tombstone path: {}.", tombstonePath);
+					CU::Logger::Error("-- tombstone start --\n{}", CU::ReadFile(tombstonePath));
 					CU::Logger::Error("-- tombstone end --");
 					CU::Logger::Flush();
 				}
 				break;
 			}
-			std::this_thread::sleep_for(std::chrono::seconds(1));
+			CU::SleepMs(1000);
 		}
 		std::exit(0);
 	}
-	std::this_thread::sleep_for(std::chrono::seconds(1));
+	CU::SleepMs(1000);
 }
 
 void StartDaemon(const std::string &configPath)
-{
-	if (GetLinuxKernelVersion() < MIN_KERNEL_VERSION) {
-		CU::Logger::Warn("Your Linux kernel is out-of-date.");
-	}
-	if (GetAndroidSDKVersion() < MIN_ANDROID_SDK) {
-		CU::Logger::Error("Your Android System is out-of-date.");
-		CU::Logger::Flush();
-		std::exit(0);
-	}
-	
+{	
 	CuRefreshRateTuner daemon{};
 	daemon.Run(configPath);
 
-	for (;;) {
-		sleep(UINT_MAX);
-	}
+	CU::Pause();
 }
 
 int main(int argc, char* argv[])
 {
 	auto args = ParseArgs(argc, argv);
-	SetThreadName(DAEMON_NAME);
-	SetTaskSchedPrio(0, 120);
+	CU::SetThreadName(DAEMON_NAME);
+	CU::SetTaskSchedPrio(0, 120);
 
 	// CuRefreshRate [configPath] [logPath]
 	if (args.size() == 3) {
@@ -101,7 +94,7 @@ int main(int argc, char* argv[])
 		daemon(0, 0);
 		StartDaemonWatchDog(args[2]);
 		CU::Logger::Create(CU::Logger::LogLevel::DEBUG, args[2]);
-		CU::Logger::Info("CuRefreshRateTuner V1 (%d) by chenzyadb.", GetCompileDateCode());
+		CU::Logger::Info("CuRefreshRateTuner V1 ({}) by chenzyadb.", CU::CompileDateCode());
 		StartDaemon(args[1]);
 	}
 

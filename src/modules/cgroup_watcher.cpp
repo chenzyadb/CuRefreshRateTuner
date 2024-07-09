@@ -1,28 +1,24 @@
 #include "cgroup_watcher.h"
 
-CgroupWatcher::CgroupWatcher() : Module(), screenState_(ScreenState::SCREEN_OFF) { }
+CgroupWatcher::CgroupWatcher() : Module(), screenState_(ScreenState::SCREEN_ON) { }
 
 CgroupWatcher::~CgroupWatcher() { }
 
 void CgroupWatcher::Start()
 {
-	if (GetAndroidSDKVersion() < __ANDROID_API_Q__) {
-		screenState_ = GetScreenStateViaWakelock();
-	} else {
-		screenState_ = GetScreenStateViaCgroup();
-	}
-	CU::EventTransfer::Post("CgroupWatcher.ScreenStateChanged", screenState_);
-	auto cpusetPaths = ListDir("/dev/cpuset");
+	auto cpusetPaths = CU::ListPath("/dev/cpuset", DT_DIR);
 	for (const auto &cpusetPath : cpusetPaths) {
 		auto tasksPath = cpusetPath + "/tasks";
-		if (IsPathExist(tasksPath)) {
+		if (CU::IsPathExists(tasksPath)) {
 			FileWatcher_AddWatch(tasksPath, std::bind(&CgroupWatcher::CgroupModified_, this));
 		}
 		auto procsPath = cpusetPath + "/cgroup.procs";
-		if (IsPathExist(procsPath)) {
+		if (CU::IsPathExists(procsPath)) {
 			FileWatcher_AddWatch(procsPath, std::bind(&CgroupWatcher::CgroupModified_, this));
 		}
 	}
+	screenState_ = GetScreenState();
+	CU::EventTransfer::Post("CgroupWatcher.ScreenStateChanged", screenState_);
 }
 
 void CgroupWatcher::CgroupModified_()
@@ -33,14 +29,9 @@ void CgroupWatcher::CgroupModified_()
 
 void CgroupWatcher::CheckScreenState_()
 {
-	ScreenState newScreenState = ScreenState::SCREEN_ON;
-	if (GetAndroidSDKVersion() < __ANDROID_API_Q__) {
-		newScreenState = GetScreenStateViaWakelock();
-	} else {
-		newScreenState = GetScreenStateViaCgroup();
-	}
-	if (screenState_ != newScreenState) {
-		CU::EventTransfer::Post("CgroupWatcher.ScreenStateChanged", newScreenState);
-		screenState_ = newScreenState;
+	auto nowaScreenState = GetScreenState();
+	if (screenState_ != nowaScreenState) {
+		CU::EventTransfer::Post("CgroupWatcher.ScreenStateChanged", nowaScreenState);
+		screenState_ = nowaScreenState;
 	}
 }

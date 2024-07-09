@@ -184,6 +184,8 @@ namespace CU
 					ValueIterator valueIter_;
 			};
 
+			typedef std::pair<_Ty1, _Ty2> Pair;
+
 			PairList() : keys_(), values_() { }
 
 			PairList(const std::vector<_Ty1> &keys, const std::vector<_Ty2> &values) :
@@ -278,18 +280,39 @@ namespace CU
 				return Iterator(keys_.end(), values_.end());
 			}
 
-			std::pair<_Ty1, _Ty2> front() const
+			Pair front() const
 			{
 				return std::make_pair(keys_.front(), values_.front());
 			}
 
-			std::pair<_Ty1, _Ty2> back() const
+			Pair back() const
 			{
 				return std::make_pair(keys_.back(), values_.back());
 			}
 
+			Iterator findKey(const _Ty1 &key) const
+			{
+				auto keyIter = std::find(keys_.begin(), keys_.end(), key);
+				if (keyIter == keys_.end()) {
+					return Iterator(keys_.end(), values_.end());
+				}
+				return Iterator(keyIter, (values_.begin() + (keyIter - keys_.begin())));
+			}
+
+			Iterator findValue(const _Ty2 &value) const
+			{
+				auto valueIter = std::find(values_.begin(), values_.end(), value);
+				if (valueIter == values_.end()) {
+					return Iterator(keys_.end(), values_.end());
+				}
+				return Iterator((keys_.begin() + (valueIter - values_.begin())), valueIter);
+			}
+
 			void add(const _Ty1 &key, const _Ty2 &value)
 			{
+				if (std::find(keys_.begin(), keys_.end(), key) != keys_.end()) {
+					throw PairListExcept("Key already exists");
+				}
 				keys_.emplace_back(key);
 				values_.emplace_back(value);
 			}
@@ -312,6 +335,12 @@ namespace CU
 				}
 				keys_.erase(keys_.begin() + (valueIter - values_.begin()));
 				values_.erase(valueIter);
+			}
+
+			void remove(const Iterator &iter)
+			{
+				keys_.erase(iter.keyIter());
+				values_.erase(iter.valueIter());
 			}
 
 			std::vector<_Ty1> keys() const

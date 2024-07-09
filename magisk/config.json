@@ -1,18 +1,18 @@
 {
-    "idleDelay": 2000,
-    "*": {
-        "active": 120,
-        "idle": 60,
-        "resolution": 1080
+    "idleDelay": 2000,        # The delay from active state to idle state (milliseconds)
+    "*": {                    # Policy name (support */screenOff/[packageName])
+        "active": 120,        # Refresh rate when touching the screen
+        "idle": 60,           # Refresh rate when not touching the screen
+        "resolution": -1      # When set to -1, automatically match highest resolution
     },
     "screenOff": {
         "active": 60,
         "idle": 60,
-        "resolution": 1080
+        "resolution": -1
     },
     "com.miHoYo.Yuanshen": {
         "active": 60,
         "idle": 60,
-        "resolution": 1080
+        "resolution": -1
     }
 }

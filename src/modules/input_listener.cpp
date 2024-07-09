@@ -6,16 +6,9 @@ InputListener::~InputListener() { }
 
 void InputListener::Start()
 {
-	auto dir = opendir("/dev/input");
-	if (dir) {
-		for (auto entry = readdir(dir); entry != nullptr; entry = readdir(dir)) {
-			if (entry->d_type == DT_CHR) {
-				auto eventPath = StrMerge("/dev/input/%s", entry->d_name);
-				std::thread listenerThread(std::bind(&InputListener::ListenerMain_, this, eventPath));
-				listenerThread.detach();
-			}
-		}
-		closedir(dir);
+	auto eventPaths = CU::ListPath("/dev/input", DT_CHR);
+	for (const auto &eventPath : eventPaths) {
+		std::thread(std::bind(&InputListener::ListenerMain_, this, eventPath)).detach();
 	}
 }
 
@@ -25,8 +18,8 @@ void InputListener::ListenerMain_(std::string eventPath)
 		return ((bit[mask / 8] & (1 << (mask % 8))) != 0);
 	};
 
-	SetThreadName("InputListener");
-	SetTaskSchedPrio(0, 95);
+	CU::SetThreadName("InputListener");
+	CU::SetTaskSchedPrio(0, 95);
 
 	{
 		int fd = open(eventPath.c_str(), O_RDONLY | O_NONBLOCK);
@@ -44,7 +37,7 @@ void InputListener::ListenerMain_(std::string eventPath)
 
 		char inputName[32] = { 0 };
 		ioctl(fd, EVIOCGNAME(sizeof(inputName)), inputName);
-		CU::Logger::Info("Listening \"%s\".", inputName);
+		CU::Logger::Info("Listening \"{}\".", inputName);
 
 		close(fd);
 	}
@@ -68,5 +61,5 @@ void InputListener::ListenerMain_(std::string eventPath)
 			break;
 		}
 	}
-	CU::Logger::Warn("Failed to listen %s.", eventPath.c_str());
+	CU::Logger::Warn("Failed to listen {}.", eventPath);
 }

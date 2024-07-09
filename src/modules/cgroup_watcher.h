@@ -2,9 +2,11 @@
 
 #include "platform/module.h"
 #include "utils/libcu.h"
-#include "utils/cu_sched.h"
+#include "utils/CuFile.h"
+#include "utils/CuSched.h"
 #include "utils/CuLogger.h"
 #include "utils/CuEventTransfer.h"
+#include "utils/android_platform.h"
 
 class CgroupWatcher : public Module
 {

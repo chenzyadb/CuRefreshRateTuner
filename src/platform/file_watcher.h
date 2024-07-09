@@ -2,8 +2,9 @@
 
 #include "singleton.h"
 #include "utils/libcu.h"
-#include "utils/cu_sched.h"
+#include "utils/CuSched.h"
 #include "utils/CuLogger.h"
+#include <unistd.h>
 #include <sys/inotify.h>
 
 class FileWatcher : public Singleton<FileWatcher> 
@@ -33,7 +34,7 @@ class FileWatcher : public Singleton<FileWatcher>
             if (wd >= 0) {
                 watcherMap_.emplace(wd, notifier);
             } else {
-                CU::Logger::Warn("Failed to watch %s.", path.c_str());
+                CU::Logger::Warn("Failed to watch {}.", path);
             }
         }
 
@@ -43,8 +44,8 @@ class FileWatcher : public Singleton<FileWatcher>
 
         void WatcherMain_()
         {
-            SetThreadName("FileWatcher");
-            SetTaskSchedPrio(0, 95);
+            CU::SetThreadName("FileWatcher");
+            CU::SetTaskSchedPrio(0, 95);
 
             auto buffer = new inotify_event[128];
             for (;;) {

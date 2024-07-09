@@ -6,8 +6,8 @@ RefreshRateTuner::RefreshRateTuner(const std::string &configPath) :
     timer_(),
     displayModeMap_(), 
     config_(),
-    activeDisplayModeIdx_(-1),
-    idleDisplayModeIdx_(-1),
+    activeDisplayModeId_(-1),
+    idleDisplayModeId_(-1),
     keyDownTime_(0),
     keyUpTime_(0),
     active_(false) 
@@ -38,56 +38,47 @@ void RefreshRateTuner::Start()
 
 void RefreshRateTuner::Init_()
 {
-    auto displayInfo = ExecCommand("dumpsys display");
-    if (StrContains(displayInfo, "mSfDisplayModes=")) {
+    auto displayInfo = CU::ExecCommand("dumpsys display");
+    if (CU::StrContains(displayInfo, "mSfDisplayModes=")) {
         std::vector<std::string> displayModes{};
-        auto lines = StrSplitLine(GetPostString(displayInfo, "mSfDisplayModes="));
+        auto lines = CU::StrSplit(displayInfo, '\n');
         for (const auto &line : lines) {
-            // DisplayMode{id=0, width=1080, height=2460, xDpi=397.565, yDpi=397.987, refreshRate=144.00002,
-            if (StrContains(line, "DisplayMode{")) {
-                displayModes.emplace_back(line);
-            } else {
-                break;
+            // DisplayMode{id=0,width=1080,height=2460,xDpi=397.565,yDpi=397.987,refreshRate=144.00002,...
+            auto trimedLine = CU::TrimStr(line);
+            if (CU::StrStartsWith(trimedLine, "DisplayMode{")) {
+                displayModes.emplace_back(trimedLine);
             }
         }
         for (const auto &displayMode : displayModes) {
-            if (StrContains(displayMode, "refreshRate=")) {
-                int id = StringToInteger(GetPrevString(GetPostString(displayMode, "id="), ","));
-                int width = StringToInteger(GetPrevString(GetPostString(displayMode, "width="), ","));
-                int height = StringToInteger(GetPrevString(GetPostString(displayMode, "height="), ","));
-                int refreshRate = StringToInteger(GetPrevString(GetPostString(displayMode, "refreshRate="), "."));
-                displayModeMap_[refreshRate][width] = id;
-                displayModeMap_[refreshRate][height] = id;
-                CU::Logger::Info("id=%d, resolution=%dx%d, refreshRate=%d.", id, width, height, refreshRate);
-            } else if (StrContains(displayMode, "peakRefreshRate=")) {
-                int id = StringToInteger(GetPrevString(GetPostString(displayMode, "id="), ","));
-                int width = StringToInteger(GetPrevString(GetPostString(displayMode, "width="), ","));
-                int height = StringToInteger(GetPrevString(GetPostString(displayMode, "height="), ","));
-                int peakRefreshRate = StringToInteger(GetPrevString(GetPostString(displayMode, "peakRefreshRate="), "."));
-                displayModeMap_[peakRefreshRate][width] = id;
-                displayModeMap_[peakRefreshRate][height] = id;
-                CU::Logger::Info("id=%d, resolution=%dx%d, peakRefreshRate=%d.", id, width, height, peakRefreshRate);
+            int id = CU::StrToInt(CU::SubPrevStr(CU::SubPostStr(displayMode, "id="), ','));
+            int width = CU::StrToInt(CU::SubPrevStr(CU::SubPostStr(displayMode, "width="), ','));
+            int height = CU::StrToInt(CU::SubPrevStr(CU::SubPostStr(displayMode, "height="), ','));
+            int refreshRate = CU::StrToInt(CU::SubPrevStr(CU::SubPostStr(displayMode, "refreshRate="), '.'));
+            if (refreshRate == 0) {
+                refreshRate = CU::StrToInt(CU::SubPrevStr(CU::SubPostStr(displayMode, "peakRefreshRate="), '.'));
             }
+            displayModeMap_[refreshRate][width] = id;
+            displayModeMap_[refreshRate][height] = id;
+            CU::Logger::Info("id={}, resolution={}x{}, refreshRate={}.", id, width, height, refreshRate);
         }
-    } else if (StrContains(displayInfo, "mSupportedModes=")) {
+    } else if (CU::StrContains(displayInfo, "mSupportedModes=")) {
         std::vector<std::string> supportedModes{};
-        auto lines = StrSplitLine(GetPostString(displayInfo, "mSupportedModes="));
+        auto lines = CU::StrSplit(displayInfo, '\n');
         for (const auto &line : lines) {
-            // DisplayModeRecord{mMode={id=1, width=1080, height=1920, fps=60.000004}}
-            if (StrContains(line, "DisplayModeRecord{mMode=")) {
-                supportedModes.emplace_back(line);
-            } else {
-                break;
+            // DisplayModeRecord{mMode={id=1,width=1080,height=1920,fps=60.000004}}
+            auto trimedLine = CU::TrimStr(line);
+            if (CU::StrStartsWith(line, "DisplayModeRecord{mMode={")) {
+                supportedModes.emplace_back(trimedLine);
             }
         }
         for (const auto &modeRecord : supportedModes) {
-            int id = StringToInteger(GetPrevString(GetPostString(modeRecord, "id="), ","));
-            int width = StringToInteger(GetPrevString(GetPostString(modeRecord, "width="), ","));
-            int height = StringToInteger(GetPrevString(GetPostString(modeRecord, "height="), ","));
-            int fps = StringToInteger(GetPrevString(GetPostString(modeRecord, "fps="), "."));
-            displayModeMap_[fps][width] = id - 1;
-            displayModeMap_[fps][height] = id - 1;
-            CU::Logger::Info("id=%d, resolution=%dx%d, fps=%d.", id, width, height, fps);
+            int id = CU::StrToInt(CU::SubPrevStr(CU::SubPostStr(modeRecord, "id="), ',')) - 1;
+            int width = CU::StrToInt(CU::SubPrevStr(CU::SubPostStr(modeRecord, "width="), ','));
+            int height = CU::StrToInt(CU::SubPrevStr(CU::SubPostStr(modeRecord, "height="), ','));
+            int fps = CU::StrToInt(CU::SubPrevStr(CU::SubPostStr(modeRecord, "fps="), '.'));
+            displayModeMap_[fps][width] = id;
+            displayModeMap_[fps][height] = id;
+            CU::Logger::Info("id={}, resolution={}x{}, fps={}.", id, width, height, fps);
         }
     } else {
         CU::Logger::Error("Failed to get display modes.");
@@ -98,13 +89,13 @@ void RefreshRateTuner::Init_()
 
 void RefreshRateTuner::IdleLoop_()
 {
-    SetThreadName("IdleLoop");
-    SetTaskSchedPrio(0, 95);
+    CU::SetThreadName("IdleLoop");
+    CU::SetTaskSchedPrio(0, 95);
 
     TIMER_LOOP(timer_) {
         int idleDelay = config_.data().at("idleDelay").toInt();
         if (active_ && keyUpTime_ > keyDownTime_) {
-            auto keyUpDuration = GetTimeStampMs() - keyUpTime_;
+            auto keyUpDuration = CU::TimeStamp() - keyUpTime_;
             if (keyUpDuration >= idleDelay) {
                 SetIdleRefreshRate_();
                 timer_.setInterval(idleDelay);
@@ -120,27 +111,24 @@ void RefreshRateTuner::IdleLoop_()
 void RefreshRateTuner::LoadConfig_()
 {
     try {
-        config_ = CU::JSONObject(ReadFile(configPath_));
+        config_ = CU::JSONObject(CU::ReadFile(configPath_), true);
         CU::Logger::Info("Config loaded.");
     } catch (const std::exception &e) {
         CU::Logger::Warn("Failed to load config.");
-        CU::Logger::Warn("Exception Thrown: %s.", e.what());
+        CU::Logger::Warn("Exception Thrown: {}.", e.what());
     }
 }
 
 void RefreshRateTuner::UpdatePolicy_(const std::string &appName)
 {
-    static const auto findDisplayModeIdx = [this](const int &fps, const int &resolution) -> int {
-        auto fpsIter = displayModeMap_.find(fps);
-        if (fpsIter == displayModeMap_.end()) {
-            return -1;
+    static const auto findDisplayModeId = [this](int fps, int resolution) -> int {
+        if (!displayModeMap_.containsKey(fps)) {
+            fps = *CU::MaxIter(displayModeMap_.keys());
         }
-        const auto &resolutionMap = fpsIter->second;
-        auto resolutionIter = resolutionMap.find(resolution);
-        if (resolutionIter == resolutionMap.end()) {
-            return -1;
+        if (!displayModeMap_.atKey(fps).containsKey(resolution)) {
+            resolution = *CU::MaxIter(displayModeMap_.atKey(fps).keys());
         }
-        return resolutionIter->second;
+        return displayModeMap_.atKey(fps).atKey(resolution);
     };
 
     auto config = config_.data();
@@ -148,48 +136,40 @@ void RefreshRateTuner::UpdatePolicy_(const std::string &appName)
     if (config.contains(appName)) {
         policy = config.at(appName).toObject();
     }
-    int activeFps = policy.at("active").toInt();
-    int idleFps = policy.at("idle").toInt();
     int resolution = policy.at("resolution").toInt();
-    activeDisplayModeIdx_ = findDisplayModeIdx(activeFps, resolution);
-    idleDisplayModeIdx_ = findDisplayModeIdx(idleFps, resolution);
-    if (activeDisplayModeIdx_ == -1 || idleDisplayModeIdx_ == -1) {
-        CU::Logger::Warn("Failed to find target DisplayMode.");
-    }
+    activeDisplayModeId_ = findDisplayModeId(policy.at("active").toInt(), resolution);
+    idleDisplayModeId_ = findDisplayModeId(policy.at("idle").toInt(), resolution);
 }
 
 void RefreshRateTuner::SetActiveRefreshRate_()
 {
-    RunCommand(StrMerge("service call SurfaceFlinger 1035 i32 %d", activeDisplayModeIdx_));
+    CU::RunCommand(CU::Format("service call SurfaceFlinger 1035 i32 {}", activeDisplayModeId_));
     active_ = true;
 }
 
 void RefreshRateTuner::SetIdleRefreshRate_()
 {
-    RunCommand(StrMerge("service call SurfaceFlinger 1035 i32 %d", idleDisplayModeIdx_));
+    CU::RunCommand(CU::Format("service call SurfaceFlinger 1035 i32 {}", idleDisplayModeId_));
     active_ = false;
 }
 
 void RefreshRateTuner::ResetRefreshRate_()
 {
     static const auto isFlymeOS = []() -> bool {
-        char buffer[PROP_VALUE_MAX] = { 0 };
+        char buffer[16] = { 0 };
         __system_property_get("ro.build.flyme.version", buffer);
-        return (atof(buffer) != 0.0);
+        return (std::atoi(buffer) != 0);
     };
 
-    int sdk_ver = GetAndroidSDKVersion();
-    if (sdk_ver >= 31 && isFlymeOS()) {
-        // Inject a hotplug connected event for the primary display.
-        RunCommand("service call SurfaceFlinger 1037");
+    static int api_level = android_get_device_api_level();
+    if (api_level >= 31 && isFlymeOS()) {
+        CU::RunCommand("service call SurfaceFlinger 1037");
     }
-    if (sdk_ver >= 30) {
-        // Turn off frame rate flexibility mode.
-        RunCommand("service call SurfaceFlinger 1036 i32 0");
+    if (api_level >= 30) {
+        CU::RunCommand("service call SurfaceFlinger 1036 i32 0");
     }
-    if (sdk_ver >= 29) {
-        // Reset debug DisplayMode set by Backdoor.
-        RunCommand("service call SurfaceFlinger 1035 i32 -1");
+    if (api_level >= 29) {
+        CU::RunCommand("service call SurfaceFlinger 1035 i32 -1");
     }
     active_ = false;
 }
@@ -200,15 +180,14 @@ void RefreshRateTuner::ScreenStateChanged_(const CU::EventTransfer::TransData &t
     if (screenState == ScreenState::SCREEN_OFF) {
         UpdatePolicy_("screenOff");
         timer_.pauseTimer();
-        WorkerThread_AddWork([this]() {
-            SetIdleRefreshRate_();
-        });
+        WorkerThread_AddWork(std::bind(&RefreshRateTuner::SetIdleRefreshRate_, this));
     } else {
-        UpdatePolicy_("*");
-        WorkerThread_AddWork([this]() {
+        static const auto resetRefreshRate = [this]() {
             ResetRefreshRate_();
             SetActiveRefreshRate_();
-        });
+        };
+        UpdatePolicy_("*");
+        WorkerThread_AddWork(resetRefreshRate);
         timer_.continueTimer();
     }
 }
@@ -216,30 +195,24 @@ void RefreshRateTuner::ScreenStateChanged_(const CU::EventTransfer::TransData &t
 void RefreshRateTuner::TopAppChanged_(const CU::EventTransfer::TransData &transData)
 {
     int pid = CU::EventTransfer::GetData<int>(transData);
-    UpdatePolicy_(GetTaskName(pid));
-    WorkerThread_AddWork([this]() {
-        SetActiveRefreshRate_();
-    });
+    UpdatePolicy_(CU::ReadFile(CU::Format("/proc/{}/cmdline", pid)));
+    WorkerThread_AddWork(std::bind(&RefreshRateTuner::SetActiveRefreshRate_, this));
 }
 
 void RefreshRateTuner::KeyDown_(const CU::EventTransfer::TransData &transData)
 {
-    keyDownTime_ = GetTimeStampMs();
+    keyDownTime_ = CU::TimeStamp();
     if (!active_) {
-        WorkerThread_AddWork([this]() {
-            SetActiveRefreshRate_();
-        });
+        WorkerThread_AddWork(std::bind(&RefreshRateTuner::SetActiveRefreshRate_, this));
     }
 }
 
 void RefreshRateTuner::KeyUp_(const CU::EventTransfer::TransData &transData)
 {
-    keyUpTime_ = GetTimeStampMs();
+    keyUpTime_ = CU::TimeStamp();
 }
 
 void RefreshRateTuner::ConfigModified_()
 {
-    WorkerThread_AddWork([this]() {
-        LoadConfig_();
-    });
+    WorkerThread_AddWork(std::bind(&RefreshRateTuner::LoadConfig_, this));
 }

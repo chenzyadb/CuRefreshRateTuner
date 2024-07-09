@@ -2,7 +2,9 @@
 
 #include "singleton.h"
 #include "utils/libcu.h"
-#include "utils/cu_sched.h"
+#include "utils/CuSched.h"
+#include <mutex>
+#include <condition_variable>
 
 class WorkerThread : public Singleton<WorkerThread> 
 {
@@ -29,9 +31,8 @@ class WorkerThread : public Singleton<WorkerThread>
 
         void Main_()
         {
-            SetThreadName("WorkerThread");
-            SetTaskSchedPrio(0, 95);
-
+            CU::SetThreadName("WorkerThread");
+            CU::SetTaskSchedPrio(0, 95);
             for (;;) {
                 std::vector<WorkTask> runTasks{};
                 {
